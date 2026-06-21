@@ -93,6 +93,9 @@ h1{font-size:24px;text-align:center}h2{font-size:19px}h3{font-size:15px;margin-b
 .item .vl{font-size:11px;color:var(--muted);margin-top:1px}
 .item.legal{border-left:4px solid var(--green)}.item.illegal{border-left:4px solid var(--red)}
 .item.sel{border-color:var(--gold);box-shadow:0 0 0 2px rgba(233,196,106,.25);opacity:.55}
+.item.locked{opacity:.4;filter:grayscale(.6);cursor:not-allowed;position:relative}
+.item.locked::before{content:"🔒";position:absolute;top:4px;left:4px;font-size:14px}
+.offhead{display:flex;align-items:center;justify-content:center;gap:8px;background:#141a24;border-radius:10px;padding:8px;margin-bottom:6px;font-weight:700}
 .slot{border-radius:12px;border:2px dashed var(--line);min-height:90px;display:grid;place-items:center;color:var(--line);font-size:26px}
 .lab{font-size:13px;color:var(--muted);margin:16px 0 8px;font-weight:600}
 
@@ -272,6 +275,9 @@ const ITEMS={
   cocaine:{nm:"Cocaïne",em:"❄️",legal:false,cost:5,value:10,penalty:10,col:"#dfe7ec"},
   fakepapers:{nm:"Faux papiers",em:"📄",legal:false,cost:4,value:8,penalty:8,col:"#cdb4db"},
   watches:{nm:"Montres volées",em:"⌚",legal:false,cost:3,value:7,penalty:7,col:"#bc6c25"},
+  diamonds:{nm:"Diamants",em:"💎",legal:false,cost:6,value:12,penalty:13,col:"#9be7ff"},
+  ivory:{nm:"Ivoire",em:"🐘",legal:false,cost:7,value:14,penalty:16,col:"#f0ead6"},
+  arms:{nm:"Armes",em:"🔪",legal:false,cost:8,value:16,penalty:18,col:"#9aa0a6"},
   pistol:{nm:"Pistolet",em:"🔫",legal:false,cost:0,value:30,penalty:25,col:"#cdd2d6",special:true},
   nuke:{nm:"Bombe nucléaire",em:"☢️",legal:false,cost:0,value:0,penalty:50,col:"#b5e853",special:true,nuke:true},
 };
@@ -319,7 +325,7 @@ let VIEW=null, prep=null, lastPrepRound=-1, lastRevKey=null, flashMsg='';
 let announcedRound=-1, timerRound=-1, prepDeadline=0, autoLockedRound=-1, forcedRound=-1, lastHello=0;
 let ctrlKey=null, ctrlStart=0, ctrlPhase='wait', ctrlAutoKey=null, revealUntil=0;
 let sumRound=-1, sumDeadline=0, sumNextKey=null, sumShown=false, offPopShown=false, offDeadline=0;
-let begSeen=null, begStartLocal=0, begEndKey=null;
+let begSeen=null, begStartLocal=0, begEndKey=null, begConfirm=null, begEndedFor=null;
 
 /* ============ websocket ============ */
 function buildWs(){const base=location.pathname.replace(/\/+$/,'');return (location.protocol==='https:'?'wss://':'ws://')+location.host+base+'/ws/'+room;}
@@ -367,6 +373,7 @@ function render(){
   // mendicité (overlay temps réel)
   updateBegging();
   if(VIEW.phase==='lobby')renderLobby();else renderGame();
+  if(VIEW.phase==='lobby'){begEndedFor=null;}
   renderChat();
 }
 function hide(sel){const e=$(sel);if(e)e.classList.remove('show');}
@@ -398,8 +405,9 @@ function boardHtml(centerHtml){
     const ang=(-90+i*360/n)*Math.PI/180;
     const x=50+39*Math.cos(ang), y=50+41*Math.sin(ang);
     const cls=['seat']; let badge='';
-    if(p.isOfficer){cls.push('officer');badge='<span class="badge">👮</span>';}
-    if(VIEW.phase==='prepare'&&!p.isOfficer){ if(p.ready){cls.push('ready');badge='<span class="badge">✓</span>';} else cls.push('prepping'); }
+    if(p.eliminated){cls.push('done');badge='<span class="badge">☠️</span>';}
+    else if(p.isOfficer){cls.push('officer');badge='<span class="badge">👮</span>';}
+    if(!p.eliminated&&VIEW.phase==='prepare'&&!p.isOfficer){ if(p.ready){cls.push('ready');badge='<span class="badge">✓</span>';} else cls.push('prepping'); }
     if(VIEW.phase==='inspect'&&ins){ const q=ins.queue.find(z=>z.id===p.id);
       if(q&&q.resolved){cls.push('done');badge='<span class="badge">'+(q.outcome==='busted'?'🚨':q.outcome==='clean'?'✅':'➡️')+'</span>';}
       else if(p.id===ins.currentTargetId){cls.push('target');badge='<span class="badge">🔎</span>';}
@@ -463,7 +471,9 @@ function renderGame(){
   $('#root').innerHTML=body;
   const bb=$('.begbtn-main');if(bb)bb.onclick=()=>{Snd.gong();sendAction({type:'beg_start'});};
   const ph=$('#phase');
+  const meP=VIEW.players.find(p=>p.id===VIEW.you);
   if(!VIEW.inRoster){renderSpectator(ph);}
+  else if(meP&&meP.eliminated){renderEliminated(ph);}
   else if(VIEW.phase==='prepare')renderPrepare(ph);
   else if(VIEW.phase==='inspect')renderInspect(ph);
   else if(VIEW.phase==='summary')renderSummary(ph);
@@ -474,6 +484,10 @@ function renderGame(){
 function renderSpectator(ph){
   ph.innerHTML=`${boardHtml('Partie<br>en cours')}<div class="card" style="text-align:center">
     <h2>👀 Tu observes</h2><p class="muted">La partie a déjà commencé — tu pourras jouer à la prochaine.</p></div>`;
+}
+function renderEliminated(ph){
+  ph.innerHTML=`${boardHtml('☠️ Éliminé')}<div class="card" style="text-align:center;border-color:#ff6b6b">
+    <h2>☠️ Tu es éliminé</h2><p class="muted">Plus de 3 manches dans le rouge… tu regardes la fin de la partie.</p></div>`;
 }
 
 /* préparation */
@@ -491,8 +505,10 @@ function renderPrepare(ph){
   if(VIEW.me.ready){ph.innerHTML=`${boardHtml('Coffre<br>verrouillé 🔒')}<div class="card" style="text-align:center"><h2>Coffre verrouillé 🔒</h2><p class="muted">En attente des autres…</p></div>`;return;}
   resetPrep();
   const me=meRec();const hand=VIEW.me.hand;const maxB=Math.min(VIEW.cfg.maxBribe,Math.max(0,me?me.coins:0));
+  const negative=me&&me.coins<0;
   ph.innerHTML=`<div class="card">
-    <h2>Prépare ta cargaison</h2><p class="muted" style="font-size:14px;margin:4px 0">Coffre vers ${esc(officer?officer.name:'le douanier')} · ${VIEW.cfg.cargoMin} à ${VIEW.cfg.cargoMax} objets.</p>
+    <div class="offhead">${avImg(officer?officer.avatar:0,'')} 👮 Douanier : ${esc(officer?officer.name:'?')}</div>
+    <h2>Prépare ta cargaison</h2><p class="muted" style="font-size:14px;margin:4px 0">${VIEW.cfg.cargoMin} à ${VIEW.cfg.cargoMax} objets.${negative?' <span style="color:#ff6b6b">Solde négatif : pistolet/bombe interdits 🔒</span>':''}</p>
     <div class="lab">Ta main (au moins une contrebande dedans 👀)</div><div class="hand" id="hand"></div>
     <div class="lab">Ton coffre (${prep.sel.length}/${VIEW.cfg.cargoMax}) — coût d'achat : <b>${prep.sel.reduce((a,i)=>a+(ITEMS[hand[i]]?ITEMS[hand[i]].cost:0),0)}</b> 💰 (payé au verrouillage)</div><div class="coffre" id="coffre"></div>
     <div class="lab">Déclaration — légal uniquement (${prep.decl.length}/${VIEW.cfg.cargoMax})</div>
@@ -504,8 +520,12 @@ function renderPrepare(ph){
     <button class="btn btn-primary btn-big" id="lock">Verrouiller le coffre</button>
     <p class="error" id="perr"></p></div>`;
   const handEl=$('#hand');
-  hand.forEach((id,i)=>{const inSel=prep.sel.includes(i);const c=itemCard(id,inSel?'sel':'');
-    c.onclick=()=>{if(inSel)prep.sel=prep.sel.filter(x=>x!==i);else{if(prep.sel.length>=VIEW.cfg.cargoMax)return;prep.sel.push(i);}Snd.tap();renderPrepare(ph);};
+  hand.forEach((id,i)=>{const inSel=prep.sel.includes(i);
+    const blocked=ITEMS[id].special&&negative;
+    const c=itemCard(id,(inSel?'sel':'')+(blocked?' locked':''));
+    c.onclick=()=>{
+      if(blocked){$('#perr').textContent='Solde négatif : tu ne peux pas acheter le '+ITEMS[id].nm.toLowerCase();return;}
+      if(inSel)prep.sel=prep.sel.filter(x=>x!==i);else{if(prep.sel.length>=VIEW.cfg.cargoMax)return;prep.sel.push(i);}Snd.tap();renderPrepare(ph);};
     handEl.appendChild(c);});
   const cf=$('#coffre');
   for(let s=0;s<VIEW.cfg.cargoMax;s++){const idx=prep.sel[s];if(idx!==undefined)cf.appendChild(itemCard(hand[idx],''));else{const d=document.createElement('div');d.className='slot';d.textContent='?';cf.appendChild(d);}}
@@ -608,7 +628,7 @@ function renderInspect(ph){
 
 /* bilan */
 function renderSummary(ph){
-  const ev=VIEW.summary.events;const can=VIEW.officerId===VIEW.you||VIEW.hostId===VIEW.you;
+  const ev=(VIEW.summary&&VIEW.summary.events)||[];const can=VIEW.officerId===VIEW.you||VIEW.hostId===VIEW.you;
   ph.innerHTML=`<div class="card"><h2>Bilan de la manche ${VIEW.round}</h2>
     <div style="margin:14px 0">${ev.map(srow).join('')}</div>
     ${can?`<button class="btn btn-primary btn-big" id="next">${VIEW.round>=VIEW.totalRounds?'Voir le classement':'Manche suivante'}</button>`:'<p class="muted">En attente du douanier…</p>'}</div>`;
@@ -626,8 +646,8 @@ function renderEnded(ph){
   if(!renderEnded.done){renderEnded.done=true;Snd.win();}
   const nukeBanner=f.nukeWinner?`<div class="card" style="text-align:center;border-color:#b5e853;background:radial-gradient(circle at 50% 40%,rgba(181,232,83,.15),transparent)"><div style="font-size:40px">☢️</div><b>${esc((f.ranking.find(x=>x.id===f.nukeWinner)||{}).name||'')}</b> a fait passer la bombe nucléaire et <b>remporte la partie</b> !</div>`:'';
   ph.innerHTML=`${nukeBanner}<div class="card"><h2>🏁 Fin de la partie</h2>
-    <div style="margin:14px 0">${f.ranking.map(r=>`<div class="rrow ${r.rank===1?'gold':''}"><span class="rpos">${r.rank===1?'👑':r.rank}</span>
-      ${avImg(pById(r.id)?pById(r.id).avatar:0,'big')}<span class="rnm">${esc(r.name)}</span><b>${r.coins} 💰</b></div>`).join('')}</div>
+    <div style="margin:14px 0">${f.ranking.map(r=>`<div class="rrow ${r.rank===1?'gold':''}" style="${r.eliminated?'opacity:.55':''}"><span class="rpos">${r.rank===1?'👑':r.rank}</span>
+      ${avImg(r.avatar||0,'big')}<span class="rnm">${r.eliminated?'☠️ ':''}${esc(r.name)}</span><b>${r.coins} 💰</b></div>`).join('')}</div>
     ${f.awards.length?`<h3>Trophées</h3>${f.awards.map(a=>`<div class="award"><span class="ae">${a.emoji}</span><span><b>${a.label}</b> — ${esc(a.name)} (${a.value})</span></div>`).join('')}`:''}
     <h3 style="margin-top:16px">Statistiques</h3><div class="tablewrap"><table>
       <tr><th>Joueur</th><th>📦</th><th>😏</th><th>🚨</th><th>🔍✓</th><th>💰</th></tr>
@@ -704,10 +724,12 @@ function tcol(v){return v>0?'var(--green)':v<0?'#ff6b6b':'#fff';}
 function showSumOverlay(){
   const ev=(VIEW.summary&&VIEW.summary.events)||[];
   const t=roundTally();
-  const rows=VIEW.players.map(p=>{const v=t[p.id]||0;
-    return `<div class="sumrow">${avImg(p.avatar,'')}<span class="rname">${p.isOfficer?'👮 ':''}${esc(p.name)}</span>
-      <b style="color:${tcol(v)}">${v>0?'+':''}${v} 💰</b></div>`;}).join('');
+  const rows=[...VIEW.players].sort((a,b)=>b.coins-a.coins).map(p=>{const v=t[p.id]||0;
+    return `<div class="sumrow">${avImg(p.avatar,'')}<span class="rname">${p.eliminated?'☠️ ':p.isOfficer?'👮 ':''}${esc(p.name)}</span>
+      <span style="color:${tcol(v)};font-weight:700;min-width:42px;text-align:right">${v>0?'+':''}${v}</span>
+      <b style="margin-left:10px;min-width:54px;text-align:right">${p.coins} 💰</b></div>`;}).join('');
   $('#sumov-in').innerHTML=`<h2>Bilan de la manche ${VIEW.round}/${VIEW.totalRounds}</h2>
+    <div class="muted" style="font-size:12px">manche · solde</div>
     <div class="sumrows">${rows}</div>
     <div class="evlist">${ev.map(srow).join('')||'<p class="muted">—</p>'}</div>`;
   $('#sumov').classList.add('show');
@@ -726,42 +748,61 @@ function showOfficerPop(){
 /* ---- mendicité (overlay temps réel) ---- */
 let begRenderKey=null;
 function updateBegging(){
-  const ov=$('#begov');
-  if(!VIEW.begging){ov.classList.remove('show');begSeen=null;begRenderKey=null;return;}
-  const b=VIEW.begging;
-  if(begSeen!==b.id){begSeen=b.id;begStartLocal=Date.now();}
-  const key=b.id+':'+(b.donations?b.donations.length:0);
-  if(begRenderKey===key&&ov.classList.contains('show')){
-    const tEl=$('#begtimer');if(tEl){const left=Math.max(0,Math.ceil((begStartLocal+BEG_MS-Date.now())/1000));tEl.textContent='🆘 '+left+'s';}
-    return; // évite de réécrire l'input pendant la frappe
+  const ov=$('#begov');const b=VIEW.begging;
+  if(!b){
+    if(begSeen&&begEndedFor!==begSeen){begEndedFor=begSeen;showBegRecap();clearTimeout(updateBegging._t);updateBegging._t=setTimeout(()=>$('#begov').classList.remove('show'),3500);}
+    else if(!begSeen){ov.classList.remove('show');}
+    begSeen=null;begRenderKey=null;begConfirm=null;
+    return;
   }
+  if(begSeen!==b.id){begSeen=b.id;begStartLocal=Date.now();begConfirm=null;}
+  const me=meRec();const amIBeg=VIEW.you===b.id;
+  const gave=b.gave?b.gave[VIEW.you]:undefined;
+  const elim=me&&me.eliminated;
+  const maxGive=Math.max(0,me?me.coins:0);
+  const key=b.id+':'+(b.donations?b.donations.length:0)+':'+(gave!==undefined?'G'+gave:'N')+':'+(begConfirm===null?'I':'C'+begConfirm)+':'+(amIBeg?'B':elim?'E':'')+':'+maxGive;
+  if(begRenderKey===key&&ov.classList.contains('show')){const t=$('#begtimer');if(t){const l=Math.max(0,Math.ceil((begStartLocal+BEG_MS-Date.now())/1000));t.textContent='🆘 '+l+'s';}return;}
   begRenderKey=key;
   const left=Math.max(0,Math.ceil((begStartLocal+BEG_MS-Date.now())/1000));
-  const amIBeg=VIEW.you===b.id;
   const beggar=pById(b.id);
-  const dons=(b.donations||[]).slice().reverse().map(d=>`<div class="begline">🪙 <b>${esc(d.fromName)}</b> donne ${d.amount} 💰</div>`).join('')||'<div class="muted">Personne n\'a encore donné…</div>';
-  let give='';
-  if(!amIBeg&&VIEW.inRoster){
-    give=`<div class="muted">Tu peux l'aider… ou refuser 😈</div>
-      <div class="begbtns">${[1,3,5,10].map(a=>`<button class="btn begbtn" data-g="${a}">+${a}</button>`).join('')}</div>
-      <div style="display:flex;gap:8px;margin-top:6px"><input id="giveamt" type="number" min="1" placeholder="montant libre" style="flex:1"><button class="btn" id="givec">Donner</button></div>`;
-  }else if(amIBeg){
-    give=`<div class="muted" style="margin-top:8px">Tu es en détresse 🥺 Merci à ceux qui t'aident — tu t'en souviendras…</div><button class="btn btn-ghost btn-small" id="begend" style="margin-top:10px">Terminer</button>`;
+  const dons=(b.donations||[]).slice().reverse().map(d=>`<div class="begline">🪙 <b>${esc(d.fromName)}</b> a donné ${d.amount} 💰</div>`).join('')||'<div class="muted">Personne n\'a encore donné…</div>';
+  let panel,quick=false;
+  if(amIBeg){
+    panel=`<div class="muted" style="margin-top:8px">Tu es en détresse 🥺 — les autres décident de t'aider… ou pas. Tu t'en souviendras.</div>
+      <button class="btn btn-ghost btn-small" id="begend" style="margin-top:10px">Terminer la levée</button>`;
+  }else if(elim){
+    panel=`<div class="muted" style="margin-top:8px">Tu es éliminé — tu ne peux pas donner.</div>`;
+  }else if(gave!==undefined){
+    panel=`<div class="begtotal" style="color:var(--green)">Tu as donné ${gave} 💰 🔒</div><div class="muted">Don validé — un seul par personne.</div>`;
+  }else if(begConfirm!==null){
+    const after=(me?me.coins:0)-begConfirm;
+    panel=`<div class="card" style="background:#141a24;margin-top:8px">
+      <div>Tu vas donner <b style="color:var(--gold)">${begConfirm}</b> 💰</div>
+      <div class="muted">Ton solde après le don : <b style="color:${tcol(after)}">${after}</b> 💰</div>
+      <div class="begbtns" style="margin-top:10px"><button class="btn btn-pass" id="begconfirm">✅ Confirmer</button><button class="btn btn-ghost" id="begmodify">✏️ Modifier</button></div></div>`;
+  }else{
+    quick=true;
+    panel=`<div class="muted">Entre ton don : 0 à ${maxGive} (pas d'endettement) — <b>un seul, non modifiable</b>.</div>
+      <div style="display:flex;gap:8px;margin-top:8px"><input id="giveamt" type="number" min="0" max="${maxGive}" value="0" style="flex:1"><button class="btn begbtn" id="givec">Donner</button></div>`;
   }
   $('#begov-in').innerHTML=`
     <div class="begtimer" id="begtimer">🆘 ${left}s</div>
     <h2 style="margin:8px 0">${avImg(beggar?beggar.avatar:0,'big')} ${esc(b.byName)} est fauché·e !</h2>
     <div class="begtotal">Reçu : ${b.total} 💰</div>
-    ${give}
-    <div class="quickmsg">${['Allez quoi 🥺','Jamais 😈','Pleure 💀','❤️'].map(m=>`<button class="btn" data-msg="${esc(m)}">${m}</button>`).join('')}</div>
+    ${panel}
+    ${quick?`<div class="quickmsg">${['Allez quoi 🥺','Jamais 😈','💀','❤️'].map(m=>`<button class="btn" data-msg="${esc(m)}">${m}</button>`).join('')}</div>`:''}
     <div class="beglist">${dons}</div>`;
   ov.classList.add('show');
-  if(!amIBeg&&VIEW.inRoster){
-    document.querySelectorAll('.begbtn').forEach(x=>x.onclick=()=>{Snd.coin();sendAction({type:'beg_give',amount:+x.dataset.g});});
-    const gc=$('#givec');if(gc)gc.onclick=()=>{const v=parseInt($('#giveamt').value,10);if(v>0){Snd.coin();sendAction({type:'beg_give',amount:v});$('#giveamt').value='';}};
-  }
   const be=$('#begend');if(be)be.onclick=()=>sendAction({type:'beg_end'});
+  const gc=$('#givec');if(gc)gc.onclick=()=>{let v=parseInt($('#giveamt').value,10);if(isNaN(v)||v<0)v=0;v=Math.min(v,maxGive);begConfirm=v;updateBegging();};
+  const cf=$('#begconfirm');if(cf)cf.onclick=()=>{Snd.coin();sendAction({type:'beg_give',amount:begConfirm});begConfirm=null;};
+  const md=$('#begmodify');if(md)md.onclick=()=>{begConfirm=null;updateBegging();};
   document.querySelectorAll('.quickmsg .btn').forEach(x=>x.onclick=()=>sendAction({type:'chat',text:x.dataset.msg}));
+}
+function showBegRecap(){
+  const rows=[...VIEW.players].sort((a,b)=>b.coins-a.coins).map(p=>`<div class="sumrow">${avImg(p.avatar,'')}<span class="rname">${p.eliminated?'☠️ ':''}${esc(p.name)}</span><b style="color:${tcol(p.coins)}">${p.coins} 💰</b></div>`).join('');
+  $('#begov-in').innerHTML=`<h2>💸 Levée terminée</h2><div class="muted">Nouveaux soldes</div><div class="sumrows" style="margin-top:10px">${rows}</div>`;
+  $('#begov').classList.add('show');
 }
 
 /* ticker global */

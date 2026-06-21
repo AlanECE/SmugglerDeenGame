@@ -38,6 +38,10 @@ const ITEMS = {
   cocaine: { name: "Cocaïne", legal: false, cost: 5, value: 10, penalty: 10 },
   fakepapers: { name: "Faux papiers", legal: false, cost: 4, value: 8, penalty: 8 },
   watches: { name: "Montres volées", legal: false, cost: 3, value: 7, penalty: 7 },
+  // Contrebande de plus en plus risquée (débloquée au fil des manches) : gros gain / grosse perte.
+  diamonds: { name: "Diamants volés", legal: false, cost: 6, value: 12, penalty: 13 },
+  ivory: { name: "Ivoire", legal: false, cost: 7, value: 14, penalty: 16 },
+  arms: { name: "Armes", legal: false, cost: 8, value: 16, penalty: 18 },
   // Contrebande ultime : éco spéciale (+30 / -25), exempte du coût d'achat.
   pistol: { name: "Pistolet", legal: false, cost: 0, value: 30, penalty: 25, special: true },
   // Bombe nucléaire : 1 fois/partie. Si elle passe -> fin de partie, le marchand GAGNE.
@@ -46,12 +50,15 @@ const ITEMS = {
 };
 const LEGAL_IDS = Object.keys(ITEMS).filter((k) => ITEMS[k].legal && !ITEMS[k].special);
 
-// Diversité croissante : le panel s'élargit, et l'illégal devient plus risqué au fil des manches.
+// Diversité croissante : nouveaux items illégaux de plus en plus risqués à chaque manche.
 function poolForRound(round) {
-  const ids = ["pasta", "eggs", "weed"];            // manche 1 : illégal peu risqué
+  const ids = ["pasta", "eggs", "weed"];            // manche 1
   if (round >= 2) ids.push("coffee", "watches");    // manche 2
   if (round >= 3) ids.push("cheese", "fakepapers"); // manche 3
-  if (round >= 4) ids.push("cocaine");              // manche 4+ : le plus risqué
+  if (round >= 4) ids.push("cocaine");              // manche 4
+  if (round >= 5) ids.push("diamonds");             // manche 5 : +risqué
+  if (round >= 6) ids.push("ivory");                // manche 6 : ++
+  if (round >= 7) ids.push("arms");                 // manche 7+ : +++
   return ids;
 }
 const COLORS = ["#e63946", "#457b9d", "#2a9d8f", "#e9c46a", "#9d4edd", "#f4a261"];
@@ -81,7 +88,14 @@ function newStats() {
   };
 }
 function findPlayer(s, id) { return s.players.find((p) => p.id === id); }
-function smugglerIds(s) { return s.players.filter((p) => p.id !== s.officerId).map((p) => p.id); }
+function smugglerIds(s) { return s.players.filter((p) => p.id !== s.officerId && !p.eliminated).map((p) => p.id); }
+function pickOfficer(s) {
+  const N = s.players.length;
+  let idx = (s.officerStartIndex + s.round - 1) % N;
+  let guard = 0;
+  while (s.players[idx].eliminated && guard++ < N) idx = (idx + 1) % N;
+  return s.players[idx].id;
+}
 
 // =============================================================
 //  setup
@@ -123,6 +137,8 @@ function addToRoster(s, id, name) {
     color: COLORS[idx % COLORS.length],
     avatar: idx % 6,
     coins: CFG.startingCoins,
+    negRounds: 0,       // manches consécutives en solde négatif
+    eliminated: false,  // éliminé après >3 manches en négatif
     stats: newStats(),
   });
   // L'hôte est toujours un joueur présent (utile après une revanche qui réinitialise la liste).
@@ -165,9 +181,14 @@ export function validateAction(state, playerId, action) {
     const sub = state.subs[playerId];
     if (!sub) return { ok: false, error: "Aucune cargaison" };
     if (sub.ready) return { ok: false, error: "Déjà validé" };
+    const me0 = findPlayer(state, playerId);
+    if (me0 && me0.eliminated) return { ok: false, error: "Tu es éliminé" };
     const items = Array.isArray(action.items) ? action.items : [];
     if (items.length < CFG.cargoMin || items.length > CFG.cargoMax)
       return { ok: false, error: `Choisis ${CFG.cargoMin} à ${CFG.cargoMax} objets` };
+    // En solde négatif, impossible d'acheter une contrebande ultime (pistolet / bombe).
+    if (me0 && me0.coins < 0 && items.some((id) => ITEMS[id] && ITEMS[id].special))
+      return { ok: false, error: "Solde négatif : pistolet et bombe interdits" };
     const hand = [...sub.hand];
     for (const it of items) {
       const i = hand.indexOf(it);
@@ -231,9 +252,15 @@ export function validateAction(state, playerId, action) {
   if (t === "beg_give") {
     if (!state.begging) return { ok: false, error: "Aucune mendicité en cours" };
     if (playerId === state.begging.id) return { ok: false, error: "Tu ne peux pas te donner à toi-même" };
-    if (!findPlayer(state, playerId)) return { ok: false, error: "Joueur inconnu" };
+    const donor = findPlayer(state, playerId);
+    if (!donor) return { ok: false, error: "Joueur inconnu" };
+    if (donor.eliminated) return { ok: false, error: "Tu es éliminé" };
+    if (state.begging.gave && state.begging.gave[playerId] !== undefined)
+      return { ok: false, error: "Tu as déjà donné (un seul don par personne)" };
     const amt = parseInt(action.amount, 10);
-    if (!(amt > 0)) return { ok: false, error: "Montant invalide (positif requis)" };
+    if (!(amt >= 0)) return { ok: false, error: "Montant invalide" };
+    // On ne peut pas s'endetter en donnant : max = solde courant.
+    if (amt > Math.max(0, donor.coins)) return { ok: false, error: "Tu ne peux pas donner plus que ton solde" };
     return { ok: true };
   }
 
@@ -369,26 +396,27 @@ export function applyAction(state, playerId, action) {
 
   if (t === "beg_start") {
     const p = findPlayer(s, playerId);
-    s.begging = { id: playerId, byName: p ? p.name : "Joueur", total: 0, donations: [] };
+    s.begging = { id: playerId, byName: p ? p.name : "Joueur", total: 0, donations: [], gave: {} };
     s.begged = [...(s.begged || []), playerId];
     return s;
   }
 
   if (t === "beg_give") {
-    if (s.begging) {
-      const amt = Math.min(999, parseInt(action.amount, 10));
+    if (s.begging && s.begging.gave[playerId] === undefined) {
       const donor = findPlayer(s, playerId);
       const ben = findPlayer(s, s.begging.id);
-      if (donor && ben && amt > 0) {
-        // Soldes négatifs autorisés : le don passe même si le donneur tombe en négatif.
-        donor.coins -= amt;
-        ben.coins += amt;
-        s.begging.total += amt;
-        s.begging.donations.push({ from: playerId, fromName: donor.name, amount: amt });
-        if (s.begging.donations.length > 60) s.begging.donations.shift();
-        // Dette morale mémorisée : bénéficiaire -> donneur -> total
-        s.debts[ben.id] = s.debts[ben.id] || {};
-        s.debts[ben.id][playerId] = (s.debts[ben.id][playerId] || 0) + amt;
+      // Un seul don par personne, plafonné au solde (pas d'endettement).
+      const amt = Math.max(0, Math.min(parseInt(action.amount, 10) || 0, Math.max(0, donor ? donor.coins : 0)));
+      if (donor && ben) {
+        s.begging.gave[playerId] = amt; // verrouille le donneur, même pour 0
+        if (amt > 0) {
+          donor.coins -= amt;
+          ben.coins += amt;
+          s.begging.total += amt;
+          s.begging.donations.push({ from: playerId, fromName: donor.name, amount: amt });
+          s.debts[ben.id] = s.debts[ben.id] || {};
+          s.debts[ben.id][playerId] = (s.debts[ben.id][playerId] || 0) + amt;
+        }
       }
     }
     return s;
@@ -443,9 +471,16 @@ function nextRound(s) {
   s.inspectOrder = [];
   s.inspectIndex = 0;
   s.begging = null; // une mendicité ne traverse pas les manches
-  if (s.round > s.totalRounds) { s.phase = "ended"; return; }
-  const idx = (s.officerStartIndex + s.round - 1) % s.players.length;
-  s.officerId = s.players[idx].id;
+  // Élimination : >3 manches consécutives en solde négatif.
+  for (const p of s.players) {
+    if (p.coins < 0) p.negRounds = (p.negRounds || 0) + 1;
+    else p.negRounds = 0;
+    if (p.negRounds > 3) p.eliminated = true;
+  }
+  const active = s.players.filter((p) => !p.eliminated);
+  // Fin si plus assez de joueurs (besoin d'un douanier + au moins un marchand) ou manches épuisées.
+  if (s.round > s.totalRounds || active.length < 2) { s.phase = "ended"; return; }
+  s.officerId = pickOfficer(s);
   const illegalThisRound = poolForRound(s.round).filter((x) => !ITEMS[x].legal);
   for (const id of smugglerIds(s)) {
     const hand = [];
@@ -574,6 +609,7 @@ export function viewFor(state, playerId) {
     players: state.players.map((p) => ({
       id: p.id, name: p.name, color: p.color, avatar: p.avatar || 0, coins: p.coins,
       isHost: p.id === state.hostId, isOfficer: p.id === state.officerId,
+      eliminated: !!p.eliminated, negRounds: p.negRounds || 0,
       ready: state.subs[p.id] ? state.subs[p.id].ready : false,
     })),
     chat: state.chat,
@@ -617,7 +653,8 @@ export function viewFor(state, playerId) {
   if (state.phase === "summary") v.summary = { events: state.roundEvents };
 
   if (state.phase === "ended") {
-    let ranking = [...state.players].sort((a, b) => b.coins - a.coins);
+    // Les éliminés sont classés derrière les survivants, puis tri par pièces.
+    let ranking = [...state.players].sort((a, b) => (a.eliminated ? 1 : 0) - (b.eliminated ? 1 : 0) || b.coins - a.coins);
     // La bombe nucléaire prime sur le classement : son porteur gagne d'office.
     if (state.nukeWinner) {
       const win = findPlayer(state, state.nukeWinner);
@@ -625,7 +662,8 @@ export function viewFor(state, playerId) {
     }
     v.final = {
       ranking: ranking.map((p, i) => ({
-        rank: i + 1, id: p.id, name: p.name, color: p.color, avatar: p.avatar || 0, coins: p.coins, stats: p.stats,
+        rank: i + 1, id: p.id, name: p.name, color: p.color, avatar: p.avatar || 0,
+        coins: p.coins, eliminated: !!p.eliminated, stats: p.stats,
       })),
       awards: computeAwards(state),
       nukeWinner: state.nukeWinner || null,
