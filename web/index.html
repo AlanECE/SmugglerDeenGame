@@ -334,7 +334,10 @@ function send(o){const s=JSON.stringify(o);if(ws&&ws.readyState===1)ws.send(s);e
 function sendAction(a){send({type:'action',action:a});}
 function connect(){
   ws=new WebSocket(buildWs());
-  ws.onopen=()=>{ws.send(JSON.stringify({type:'join',playerId}));if(myName){ws.send(JSON.stringify({type:'action',action:{type:'hello',name:myName}}));ws.send(JSON.stringify({type:'action',action:{type:'avatar',avatar:myAvatar}}));}
+  ws.onopen=()=>{ws.send(JSON.stringify({type:'join',playerId}));
+    // On s'inscrit TOUJOURS dès la connexion (même sans pseudo encore saisi) pour ne jamais rester spectateur.
+    ws.send(JSON.stringify({type:'action',action:{type:'hello',name:myName||'Joueur'}}));
+    ws.send(JSON.stringify({type:'action',action:{type:'avatar',avatar:myAvatar}}));
     queue.forEach(m=>ws.send(m));queue=[];};
   ws.onclose=()=>{setTimeout(connect,1500);};
   ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='error'){flash(m.error);return;}if(m.type!=='state')return;VIEW=m.view;render();};
@@ -350,8 +353,8 @@ $('#nameinput').addEventListener('keydown',e=>{if(e.key==='Enter')$('#namego').c
 function render(){
   if(!VIEW){$('#root').innerHTML='<div class="card"><p class="muted">Connexion…</p></div>';return;}
   if(!myName)ask();
-  // ré-inscription auto si on n'est pas dans la partie en cours (ex. après une revanche)
-  if(VIEW.phase==='lobby'&&!VIEW.inRoster&&myName&&Date.now()-lastHello>1500){lastHello=Date.now();sendAction({type:'hello',name:myName});sendAction({type:'avatar',avatar:myAvatar});}
+  // ré-inscription auto si on n'est pas encore dans la partie (filet anti-spectateur, même sans pseudo)
+  if(VIEW.phase==='lobby'&&!VIEW.inRoster&&Date.now()-lastHello>1200){lastHello=Date.now();sendAction({type:'hello',name:myName||'Joueur'});sendAction({type:'avatar',avatar:myAvatar});}
   // annonce du douanier (5s) à chaque nouvelle manche
   if(VIEW.phase!=='lobby'&&VIEW.phase!=='ended'&&VIEW.officerId&&VIEW.round!==announcedRound){announcedRound=VIEW.round;showAnnounce();}
   // timer de préparation (60s)

@@ -118,7 +118,7 @@ export function setup(players) {
     begged: [],      // ids ayant déjà mendié cette partie (1 fois max)
     begging: null,   // session de mendicité en cours { id, byName, total, donations:[] }
     debts: {},       // dette morale : beneficiaryId -> { donorId: total donné }
-    cap: 6,          // nombre de joueurs max réglable par l'hôte (3 à 10)
+    cap: 10,         // nombre de joueurs max réglable par l'hôte (3 à 10) — 10 par défaut
     nukeRound: 0,    // manche où apparaît la bombe nucléaire
     nukeSpawned: false,
     nukeWinner: null,// marchand qui a fait passer la bombe (gagne la partie)
