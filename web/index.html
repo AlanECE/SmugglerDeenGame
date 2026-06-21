@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Douane & Contrebande</title>
+<style>
+:root{
+  --bg:#11151c;--panel:#1c2230;--panel2:#232b3b;--ink:#eef1f6;--muted:#9aa6b8;
+  --gold:#e9c46a;--gold2:#d4a017;--red:#c1121f;--redd:#7a0c14;--green:#4f9d69;
+  --cream:#f4f1de;--line:#2c3547;--r:14px;--sh:0 10px 30px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
+  background:radial-gradient(1200px 600px at 50% -10%,#20303f 0%,transparent 60%),var(--bg);
+  color:var(--ink);min-height:100dvh;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}
+.wrap{max-width:760px;margin:0 auto;padding:12px 12px calc(14px + env(safe-area-inset-bottom))}
+.btn{font-family:inherit;font-weight:600;font-size:16px;color:var(--ink);background:var(--panel2);
+  border:1px solid var(--line);border-radius:10px;padding:13px 18px;cursor:pointer;transition:transform .08s,filter .15s;user-select:none}
+.btn:hover{filter:brightness(1.12)}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-primary{background:linear-gradient(180deg,var(--gold),var(--gold2));color:#2a1d00;border:none}
+.btn-big{width:100%;padding:16px;font-size:18px;margin-top:14px}
+.btn-small{padding:8px 12px;font-size:14px}
+.btn-ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+.btn-pass{background:linear-gradient(180deg,#3fae6b,#2c7f4c);border:none;color:#fff}
+.btn-open{background:linear-gradient(180deg,var(--red),var(--redd));border:none;color:#fff}
+.btn-pass small,.btn-open small{display:block;font-weight:400;opacity:.85;font-size:12px;margin-top:3px}
+input{font-family:inherit;font-size:16px;color:var(--ink);background:#141a24;border:1px solid var(--line);
+  border-radius:10px;padding:13px 14px;width:100%;outline:none}
+input:focus{border-color:var(--gold)}
+.muted{color:var(--muted)}.error{color:#ff6b6b;font-size:14px;min-height:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:18px;margin-bottom:12px}
+h1{font-size:24px;text-align:center}h2{font-size:19px}h3{font-size:15px;margin-bottom:8px}
+.logo{font-size:26px;font-weight:800;text-align:center}.logo .c{color:var(--red)}
+
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(5,8,12,.85);display:none;place-items:center;z-index:60;padding:16px}
+.modal.show{display:grid}
+.modal .card{width:min(420px,94vw);text-align:center}
+
+/* topbar */
+.bar{display:flex;justify-content:space-between;align-items:center;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--r);padding:11px 14px;margin-bottom:10px;gap:8px}
+.bar b{color:var(--gold)}
+.score{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-bottom:12px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);
+  border-radius:999px;padding:6px 11px;font-size:14px;font-weight:600}
+.chip.me{border-color:var(--gold)}.chip b{color:var(--gold)}
+.chip.ready,.chip.resolved{border-color:var(--green)}
+.chip.current{border-color:var(--gold);box-shadow:0 0 0 2px rgba(233,196,106,.3)}
+.dot{width:11px;height:11px;border-radius:50%;display:inline-block}.dot.big{width:17px;height:17px}
+.tag{font-size:11px;background:var(--gold);color:#2a1d00;padding:2px 7px;border-radius:6px}
+
+/* invite */
+.code-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.code-row input{font-size:13px}
+
+/* items */
+.hand{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.coffre{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.item{border-radius:12px;background:var(--panel2);border:2px solid var(--line);min-height:90px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;padding:6px 3px;transition:transform .1s,border-color .15s}
+.item:hover{transform:translateY(-3px)}
+.item .em{font-size:30px;line-height:1}.item .nm{font-size:11px;margin-top:5px;text-align:center;font-weight:600}
+.item .vl{font-size:11px;color:var(--muted);margin-top:1px}
+.item.legal{border-left:4px solid var(--green)}.item.illegal{border-left:4px solid var(--red)}
+.item.sel{border-color:var(--gold);box-shadow:0 0 0 2px rgba(233,196,106,.25);opacity:.55}
+.slot{border-radius:12px;border:2px dashed var(--line);min-height:90px;display:grid;place-items:center;color:var(--line);font-size:26px}
+.lab{font-size:13px;color:var(--muted);margin:16px 0 8px;font-weight:600}
+
+.decl-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.step{display:flex;align-items:center;gap:10px;background:#141a24;border-radius:10px;padding:4px}
+.step span{min-width:22px;text-align:center;font-weight:700;font-size:18px}
+.types{display:flex;flex-wrap:wrap;gap:7px}
+.type{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:9px 12px;font-size:13px;cursor:pointer;font-weight:600}
+.type.active{background:var(--cream);color:#2a1d00;border-color:var(--cream)}
+#brange{width:100%;accent-color:var(--gold);height:36px}
+
+/* inspect */
+.queue{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-bottom:14px}
+.suspect{text-align:center}
+.declbox{background:#141a24;border-radius:12px;padding:16px;margin:12px 0}
+.declbox .dl{font-size:12px;color:var(--muted)}.declbox .dv{font-size:23px;font-weight:800;margin-top:4px}
+.bribebox{padding:12px;border-radius:10px;background:#141a24;color:var(--muted);margin-bottom:16px}
+.bribebox.has{background:rgba(233,196,106,.14);color:var(--gold);font-size:17px}
+.decide{display:grid;grid-template-columns:1fr;gap:12px}
+
+/* summary */
+.srow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel2);border-left:4px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:8px}
+.srow.pass{border-left-color:var(--gold)}.srow.bust{border-left-color:var(--red)}.srow.clean{border-left-color:var(--green)}
+.srow .it{font-size:19px}
+
+/* ended */
+.rrow{display:flex;align-items:center;gap:12px;background:var(--panel2);border-radius:10px;padding:12px 16px;margin-bottom:8px;font-size:16px}
+.rrow.gold{background:linear-gradient(90deg,rgba(233,196,106,.22),transparent);border:1px solid var(--gold)}
+.rpos{width:26px;text-align:center;font-weight:800}.rnm{flex:1}.rrow b{color:var(--gold)}
+.award{display:flex;align-items:center;gap:10px;padding:5px 0}.award .ae{font-size:21px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:7px 5px;text-align:center;border-bottom:1px solid var(--line)}th{color:var(--muted)}
+td:first-child,th:first-child{text-align:left}
+.tablewrap{overflow-x:auto}
+
+/* chat */
+.chat{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-top:12px}
+.cmsgs{max-height:110px;overflow-y:auto;padding:10px 14px;font-size:14px}
+.cmsg{margin-bottom:4px;line-height:1.4;word-break:break-word}
+.cin{display:flex;gap:8px;padding:8px;border-top:1px solid var(--line)}.cin input{flex:1}
+
+/* reveal */
+.ov{position:fixed;inset:0;background:rgba(5,8,12,.82);display:none;place-items:center;z-index:50;backdrop-filter:blur(3px)}
+.ov.show{display:grid;animation:fade .2s}
+.rev{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:28px 30px;text-align:center;width:min(420px,92vw);transform:scale(.8);opacity:0;transition:transform .35s cubic-bezier(.2,1.3,.5,1),opacity .25s}
+.rev.open{transform:scale(1);opacity:1}
+.rev.bust{border-color:var(--red);box-shadow:0 0 50px rgba(193,18,31,.5)}
+.rev.pass{border-color:var(--gold);box-shadow:0 0 50px rgba(233,196,106,.4)}
+.rev.clean{border-color:var(--green);box-shadow:0 0 50px rgba(79,157,105,.4)}
+.rev .chest{font-size:58px;animation:shake .5s}
+.rev h2{margin:8px 0}.rev .who{color:var(--muted);margin-bottom:12px}
+.revit{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
+.revit div{width:64px;height:64px;border-radius:12px;color:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:27px;animation:pop .35s backwards}
+.revit div small{font-size:10px;font-weight:700}
+.revit div:nth-child(2){animation-delay:.1s}.revit div:nth-child(3){animation-delay:.2s}
+.money{font-weight:700;font-size:16px}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes pop{from{transform:scale(0)}to{transform:scale(1)}}
+@keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-10deg)}75%{transform:rotate(10deg)}}
+@media(min-width:560px){.decide{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap" id="root"><div class="card"><p class="muted">Connexion…</p></div></div>
+
+<!-- chat (réutilisé) -->
+<div class="wrap" id="chatwrap" style="display:none">
+  <div class="chat">
+    <div class="cmsgs" id="cmsgs"></div>
+    <div class="cin"><input id="cinput" maxlength="200" placeholder="Message…"><button class="btn btn-small" id="csend">↑</button></div>
+  </div>
+</div>
+
+<!-- modal pseudo -->
+<div class="modal" id="namemodal">
+  <div class="card">
+    <div class="logo">🕵️ Douane <span class="c">&amp; Contrebande</span></div>
+    <p class="muted" style="margin:10px 0 16px">Bluffe. Soudoie. Fouille. Encaisse.</p>
+    <input id="nameinput" maxlength="16" placeholder="Ton pseudo" autocomplete="off">
+    <button class="btn btn-primary btn-big" id="namego">Entrer</button>
+  </div>
+</div>
+
+<!-- reveal -->
+<div class="ov" id="ov"><div class="rev" id="rev"></div></div>
+
+<script>
+const ITEMS={
+  pasta:{nm:"Pâtes",em:"🍝",legal:true,value:2,penalty:1,col:"#e9d8a6"},
+  eggs:{nm:"Œufs",em:"🥚",legal:true,value:2,penalty:1,col:"#f4f1de"},
+  coffee:{nm:"Café",em:"☕",legal:true,value:3,penalty:1,col:"#a98467"},
+  cheese:{nm:"Fromage",em:"🧀",legal:true,value:3,penalty:2,col:"#f2cc8f"},
+  weed:{nm:"Weed",em:"🌿",legal:false,value:5,penalty:4,col:"#588157"},
+  cocaine:{nm:"Cocaïne",em:"❄️",legal:false,value:7,penalty:6,col:"#dfe7ec"},
+  fakepapers:{nm:"Faux papiers",em:"📄",legal:false,value:6,penalty:5,col:"#cdb4db"},
+  watches:{nm:"Montres volées",em:"⌚",legal:false,value:5,penalty:4,col:"#bc6c25"},
+};
+const LEGAL=Object.keys(ITEMS).filter(k=>ITEMS[k].legal);
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>n>=0?'+'+n:''+n;
+
+/* ---- sons WebAudio ---- */
+const Snd=(()=>{let c=null;const e=()=>{if(!c)c=new(window.AudioContext||window.webkitAudioContext)();if(c.state==='suspended')c.resume();return c};
+  function t(f,d,ty='sine',v=.18,w=0){const x=e(),o=x.createOscillator(),g=x.createGain();o.type=ty;o.frequency.value=f;o.connect(g);g.connect(x.destination);
+    const n=x.currentTime+w;g.gain.setValueAtTime(0,n);g.gain.linearRampToValueAtTime(v,n+.01);g.gain.exponentialRampToValueAtTime(.0001,n+d);o.start(n);o.stop(n+d+.02)}
+  return{coin(){t(880,.12,'triangle',.16);t(1320,.12,'triangle',.1,.05)},sel(){t(440,.06,'square',.1)},chest(){t(180,.25,'sawtooth',.16);t(90,.4,'sine',.16,.05)},
+    siren(){const x=e(),o=x.createOscillator(),g=x.createGain();o.type='sawtooth';o.connect(g);g.connect(x.destination);const n=x.currentTime;
+      g.gain.setValueAtTime(.15,n);o.frequency.setValueAtTime(660,n);o.frequency.linearRampToValueAtTime(440,n+.25);o.frequency.linearRampToValueAtTime(660,n+.5);g.gain.exponentialRampToValueAtTime(.0001,n+.6);o.start(n);o.stop(n+.62)},
+    win(){t(523,.12,'triangle',.16);t(659,.12,'triangle',.16,.1);t(784,.2,'triangle',.16,.2)},lose(){t(330,.15,'sawtooth',.16);t(220,.3,'sawtooth',.16,.12)}};})();
+
+/* ---- room + identité ---- */
+const params=new URLSearchParams(location.search);
+let room=params.get('room');
+if(!room){room=Math.random().toString(36).slice(2,7).toUpperCase();params.set('room',room);history.replaceState(null,'',location.pathname+'?'+params);}
+let playerId=sessionStorage.getItem('sd-id');
+if(!playerId){playerId='p-'+Math.random().toString(36).slice(2,10);sessionStorage.setItem('sd-id',playerId);}
+let myName=localStorage.getItem('sd-name')||'';
+
+/* ---- état local ---- */
+let VIEW=null, prep=null, lastPrepRound=-1, lastRevKey=null;
+
+/* ---- websocket ---- */
+const base=location.pathname.replace(/\/+$/,'');
+const wsUrl=(location.protocol==='https:'?'wss://':'ws://')+location.host+base+'/ws/'+room;
+let ws,queue=[];
+function send(o){const s=JSON.stringify(o);if(ws&&ws.readyState===1)ws.send(s);else queue.push(s);}
+function sendAction(a){send({type:'action',action:a});}
+function connect(){
+  ws=new WebSocket(wsUrl);
+  ws.onopen=()=>{ws.send(JSON.stringify({type:'join',playerId}));if(myName)ws.send(JSON.stringify({type:'action',action:{type:'hello',name:myName}}));
+    queue.forEach(m=>ws.send(m));queue=[];};
+  ws.onclose=()=>{setTimeout(connect,1500);};
+  ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='error'){flash(m.error);return;}if(m.type!=='state')return;VIEW=m.view;render();};
+}
+let flashMsg='';
+function flash(t){flashMsg=t;const el=$('#errline');if(el)el.textContent=t;setTimeout(()=>{if(flashMsg===t){flashMsg='';const e2=$('#errline');if(e2)e2.textContent='';}},3000);}
+
+/* ---- modal pseudo ---- */
+function ask(){if(myName){$('#namemodal').classList.remove('show');return;}$('#namemodal').classList.add('show');$('#nameinput').value=myName;$('#nameinput').focus();}
+$('#namego').onclick=()=>{const n=$('#nameinput').value.trim();if(!n)return;myName=n;localStorage.setItem('sd-name',n);$('#namemodal').classList.remove('show');sendAction({type:'hello',name:n});};
+$('#nameinput').addEventListener('keydown',e=>{if(e.key==='Enter')$('#namego').click();});
+
+/* ---- rendu ---- */
+function render(){
+  if(!VIEW){$('#root').innerHTML='<div class="card"><p class="muted">Connexion…</p></div>';return;}
+  handleReveal();
+  if(!myName){ask();}
+  const p=VIEW.phase;
+  if(p==='lobby')renderLobby();
+  else renderGame();
+  renderChat();
+}
+
+function meRec(){return VIEW.players.find(p=>p.id===VIEW.you);}
+
+function renderLobby(){
+  $('#chatwrap').style.display='block';
+  const isHost=VIEW.hostId===VIEW.you;
+  const enough=VIEW.players.length>=VIEW.cfg.startMin;
+  $('#root').innerHTML=`
+   <div class="card" style="text-align:center">
+     <div class="logo">🕵️ Douane <span class="c">&amp; Contrebande</span></div>
+     <p class="muted" style="margin-top:6px">Salon privé — partage le lien pour inviter</p>
+     <div class="code-row"><input readonly id="invlink" value="${esc(location.href)}"><button class="btn btn-small" id="copy">Copier</button></div>
+   </div>
+   <div class="card">
+     <h2>Joueurs (${VIEW.players.length}/${VIEW.cfg.maxPlayers})</h2>
+     <div class="score" style="margin-top:12px">${VIEW.players.map(p=>`<span class="chip ${p.id===VIEW.you?'me':''}">
+        <span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.isHost?' <span class="tag">Hôte</span>':''}</span>`).join('')}</div>
+     <p class="muted" id="lobinfo">${enough?(isHost?'Prêt ? Lance la partie !':"En attente de l'hôte…"):`Il faut au moins ${VIEW.cfg.startMin} joueurs.`}</p>
+     ${isHost?`<button class="btn btn-primary btn-big" id="startbtn" ${enough?'':'disabled'}>Lancer la partie</button>`:''}
+     <p class="error" id="errline"></p>
+   </div>`;
+  $('#copy').onclick=()=>{const i=$('#invlink');i.select();navigator.clipboard&&navigator.clipboard.writeText(location.href);const b=$('#copy');b.textContent='Copié ✓';setTimeout(()=>b.textContent='Copier',1500);};
+  const sb=$('#startbtn');if(sb)sb.onclick=()=>{Snd.sel();sendAction({type:'start'});};
+}
+
+function renderGame(){
+  $('#chatwrap').style.display='block';
+  const me=meRec();
+  let body='';
+  body+=`<div class="bar"><div>Manche <b style="color:var(--ink)">${VIEW.round}</b>/${VIEW.totalRounds}</div>
+    <div class="muted" style="font-size:14px">${VIEW.phase==='prepare'?'Préparation':VIEW.phase==='inspect'?'Inspection':VIEW.phase==='summary'?'Bilan':'Fin'}</div>
+    <div>💰 <b>${me?me.coins:'-'}</b></div></div>`;
+  body+=`<div class="score">${[...VIEW.players].sort((a,b)=>b.coins-a.coins).map(p=>`<span class="chip ${p.id===VIEW.you?'me':''}">
+     <span class="dot" style="background:${p.color}"></span>${p.isOfficer?'👮 ':''}${esc(p.name)} <b>${p.coins}</b></span>`).join('')}</div>`;
+  body+='<div id="phase"></div><p class="error" id="errline"></p>';
+  $('#root').innerHTML=body;
+  const ph=$('#phase');
+  if(VIEW.phase==='prepare')renderPrepare(ph);
+  else if(VIEW.phase==='inspect')renderInspect(ph);
+  else if(VIEW.phase==='summary')renderSummary(ph);
+  else if(VIEW.phase==='ended')renderEnded(ph);
+  if(flashMsg)$('#errline').textContent=flashMsg;
+}
+
+/* préparation */
+function resetPrep(){if(lastPrepRound!==VIEW.round||!prep){lastPrepRound=VIEW.round;prep={sel:[],declType:LEGAL[0],declQty:1,bribe:0};}}
+function renderPrepare(ph){
+  const officer=VIEW.players.find(p=>p.isOfficer);
+  if(VIEW.you===VIEW.officerId){
+    const waiting=VIEW.players.filter(p=>!p.isOfficer);
+    const isHost=VIEW.hostId===VIEW.you;
+    ph.innerHTML=`<div class="card" style="text-align:center"><h2>👮 Tu es le douanier</h2>
+      <p class="muted">Les contrebandiers préparent leur coffre…</p>
+      <div class="score" style="margin-top:14px">${waiting.map(p=>`<span class="chip ${p.ready?'ready':''}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)} ${p.ready?'✓':'…'}</span>`).join('')}</div>
+      <button class="btn btn-ghost btn-small" id="force" style="margin-top:14px">Forcer l'inspection</button></div>`;
+    $('#force').onclick=()=>sendAction({type:'force_inspect'});
+    return;
+  }
+  if(!VIEW.me){ph.innerHTML='<div class="card"><p class="muted">…</p></div>';return;}
+  if(VIEW.me.ready){ph.innerHTML='<div class="card" style="text-align:center"><h2>Coffre verrouillé 🔒</h2><p class="muted">En attente des autres…</p></div>';return;}
+  resetPrep();
+  const me=meRec();const hand=VIEW.me.hand;const maxB=Math.min(VIEW.cfg.maxBribe,Math.max(0,me?me.coins:0));
+  ph.innerHTML=`<div class="card">
+    <h2>Prépare ta cargaison</h2><p class="muted" style="font-size:14px;margin:4px 0">Coffre vers ${esc(officer?officer.name:'le douanier')} · choisis ${VIEW.cfg.cargoMin} à ${VIEW.cfg.cargoMax} objets, puis déclare-les.</p>
+    <div class="lab">Ta main</div><div class="hand" id="hand"></div>
+    <div class="lab">Ton coffre (${prep.sel.length}/${VIEW.cfg.cargoMax})</div><div class="coffre" id="coffre"></div>
+    <div class="lab">Déclaration officielle</div>
+    <div class="decl-row"><div class="step"><button class="btn btn-small" id="qm">−</button><span id="dq">${prep.declQty}</span><button class="btn btn-small" id="qp">+</button></div>
+      <span class="muted">×</span><div class="types" id="types"></div></div>
+    <div class="lab">Pot-de-vin 💰 <span id="bv">${prep.bribe}</span> (max ${maxB})</div>
+    <input type="range" id="brange" min="0" max="${maxB}" value="${Math.min(prep.bribe,maxB)}">
+    <button class="btn btn-primary btn-big" id="lock">Verrouiller le coffre</button>
+    <p class="error" id="perr"></p></div>`;
+  const handEl=$('#hand');
+  hand.forEach((id,i)=>{const inSel=prep.sel.includes(i);const c=itemCard(id,inSel?'sel':'');
+    c.onclick=()=>{if(inSel)prep.sel=prep.sel.filter(x=>x!==i);else{if(prep.sel.length>=VIEW.cfg.cargoMax)return;prep.sel.push(i);}
+      Snd.sel();prep.declQty=Math.max(VIEW.cfg.cargoMin,Math.min(VIEW.cfg.cargoMax,prep.sel.length||1));renderPrepare(ph);};
+    handEl.appendChild(c);});
+  const cf=$('#coffre');
+  for(let s=0;s<VIEW.cfg.cargoMax;s++){const idx=prep.sel[s];if(idx!==undefined)cf.appendChild(itemCard(hand[idx],''));else{const d=document.createElement('div');d.className='slot';d.textContent='?';cf.appendChild(d);}}
+  const te=$('#types');
+  LEGAL.forEach(id=>{const b=document.createElement('button');b.className='type'+(prep.declType===id?' active':'');b.innerHTML=ITEMS[id].em+' '+ITEMS[id].nm;
+    b.onclick=()=>{prep.declType=id;Snd.sel();renderPrepare(ph);};te.appendChild(b);});
+  $('#qm').onclick=()=>{prep.declQty=Math.max(VIEW.cfg.cargoMin,prep.declQty-1);renderPrepare(ph);};
+  $('#qp').onclick=()=>{prep.declQty=Math.min(VIEW.cfg.cargoMax,prep.declQty+1);renderPrepare(ph);};
+  $('#brange').oninput=e=>{prep.bribe=+e.target.value;$('#bv').textContent=prep.bribe;Snd.coin();};
+  $('#lock').onclick=()=>{if(prep.sel.length<VIEW.cfg.cargoMin){$('#perr').textContent='Choisis au moins '+VIEW.cfg.cargoMin+' objet';return;}
+    Snd.chest();sendAction({type:'submit',items:prep.sel.map(i=>hand[i]),declType:prep.declType,declQty:prep.declQty,bribe:prep.bribe});};
+}
+
+/* inspection */
+function renderInspect(ph){
+  const ins=VIEW.inspect;const tgt=ins.queue.find(q=>q.id===ins.currentTargetId);
+  const isOff=VIEW.you===VIEW.officerId||VIEW.hostId===VIEW.you;
+  const q=ins.queue.map(x=>{let b=x.id===ins.currentTargetId?'🔎':'…';if(x.resolved)b=x.outcome==='busted'?'🚨':x.outcome==='clean'?'✅':'➡️';
+    return `<span class="chip ${x.id===ins.currentTargetId?'current':''} ${x.resolved?'resolved':''}"><span class="dot" style="background:${x.color}"></span>${esc(x.name)} ${b}</span>`;}).join('');
+  if(!tgt){ph.innerHTML='<div class="card"><p class="muted">Résolution…</p></div>';return;}
+  const d=ITEMS[tgt.declType];const ds=`${tgt.declQty} × ${d.em} ${d.nm}`;
+  if(isOff){
+    ph.innerHTML=`<div class="queue">${q}</div>
+     <div class="card suspect" style="border-color:${tgt.color}">
+       <div style="display:flex;align-items:center;justify-content:center;gap:10px"><span class="dot big" style="background:${tgt.color}"></span><h2>${esc(tgt.name)}</h2></div>
+       <div class="declbox"><div class="dl">Déclare</div><div class="dv">${ds}</div></div>
+       <div class="bribebox ${tgt.bribe>0?'has':''}">${tgt.bribe>0?'💰 Pot-de-vin proposé : <b>'+tgt.bribe+'</b>':'Aucun pot-de-vin'}</div>
+       <div class="decide"><button class="btn btn-pass btn-big" id="pass" style="margin:0">✅ Laisser passer<small>tu prends ${tgt.bribe} 💰</small></button>
+         <button class="btn btn-open btn-big" id="open" style="margin:0">🔓 Ouvrir le coffre<small>risqué…</small></button></div></div>`;
+    $('#pass').onclick=()=>sendAction({type:'decide',target:tgt.id,action:'pass'});
+    $('#open').onclick=()=>sendAction({type:'decide',target:tgt.id,action:'open'});
+  }else{
+    const off=VIEW.players.find(p=>p.isOfficer);
+    ph.innerHTML=`<div class="queue">${q}</div><div class="card" style="text-align:center"><h2>👮 ${esc(off?off.name:'Le douanier')} inspecte…</h2>
+      <p class="muted">Sous le feu : <b>${esc(tgt.name)}</b></p><p class="muted">Déclaration : ${ds} · 💰 ${tgt.bribe}</p></div>`;
+  }
+}
+
+/* bilan */
+function renderSummary(ph){
+  const ev=VIEW.summary.events;const can=VIEW.officerId===VIEW.you||VIEW.hostId===VIEW.you;
+  ph.innerHTML=`<div class="card"><h2>Bilan de la manche ${VIEW.round}</h2>
+    <div style="margin:14px 0">${ev.map(srow).join('')}</div>
+    ${can?`<button class="btn btn-primary btn-big" id="next">${VIEW.round>=VIEW.totalRounds?'Voir le classement':'Manche suivante'}</button>`:'<p class="muted">En attente du douanier…</p>'}</div>`;
+  const n=$('#next');if(n)n.onclick=()=>sendAction({type:'next'});
+}
+function srow(e){const items=e.items.map(id=>ITEMS[id].em).join(' ');let l,c;
+  if(e.outcome==='passed'){c='pass';l=`passe — ${e.isLie?'a bluffé 😏':'honnête'} (+${e.smugglerDelta} / douanier +${e.officerDelta})`;}
+  else if(e.outcome==='busted'){c='bust';l=`PRIS 🚨 (${e.smugglerDelta} / douanier +${e.officerDelta})`;}
+  else{c='clean';l=`fouille injustifiée ✅ (+${e.smugglerDelta} / douanier ${e.officerDelta})`;}
+  return `<div class="srow ${c}"><b>${esc(e.smugglerName)}</b> <span class="it">${items}</span> <span>${l}</span></div>`;}
+
+/* fin */
+function renderEnded(ph){
+  const f=VIEW.final;const isHost=VIEW.hostId===VIEW.you;
+  if(!renderEnded.done){renderEnded.done=true;Snd.win();}
+  ph.innerHTML=`<div class="card"><h2>🏁 Fin de la partie</h2>
+    <div style="margin:14px 0">${f.ranking.map(r=>`<div class="rrow ${r.rank===1?'gold':''}"><span class="rpos">${r.rank===1?'👑':r.rank}</span>
+      <span class="dot" style="background:${r.color}"></span><span class="rnm">${esc(r.name)}</span><b>${r.coins} 💰</b></div>`).join('')}</div>
+    ${f.awards.length?`<h3>Trophées</h3>${f.awards.map(a=>`<div class="award"><span class="ae">${a.emoji}</span><span><b>${a.label}</b> — ${esc(a.name)} (${a.value})</span></div>`).join('')}`:''}
+    <h3 style="margin-top:16px">Statistiques</h3><div class="tablewrap"><table>
+      <tr><th>Joueur</th><th>📦</th><th>😏</th><th>🚨</th><th>🔍✓</th><th>💰</th></tr>
+      ${f.ranking.map(r=>`<tr><td>${esc(r.name)}</td><td>${r.stats.smuggledThrough}</td><td>${r.stats.liesSuccessful}</td><td>${r.stats.bustedAsSmuggler}</td><td>${r.stats.correctSearches}</td><td>${r.stats.bribesAccepted}</td></tr>`).join('')}
+    </table></div>
+    ${isHost?`<button class="btn btn-primary btn-big" id="rematch">🔁 Revanche (même groupe)</button>`:'<p class="muted">En attente de l’hôte…</p>'}</div>`;
+  const r=$('#rematch');if(r)r.onclick=()=>{renderEnded.done=false;sendAction({type:'rematch'});};
+}
+
+/* révélation */
+function handleReveal(){
+  if(!VIEW.lastReveal){lastRevKey=null;return;}
+  const r=VIEW.lastReveal;const key=VIEW.round+'-'+r.smugglerId;
+  if(key===lastRevKey)return;lastRevKey=key;showReveal(r);
+}
+function showReveal(r){
+  const ov=$('#ov'),card=$('#rev');
+  const items=r.items.map(id=>`<div style="background:${ITEMS[id].col}">${ITEMS[id].em}<small>${ITEMS[id].nm}</small></div>`).join('');
+  let title,cls,money;
+  if(r.action==='pass'){cls='pass';title='➡️ Laissé passer';money=`Contrebandier ${fmt(r.smugglerDelta)} · Douanier +${r.officerDelta} 💰`;Snd.coin();}
+  else if(r.outcome==='busted'){cls='bust';title='🚨 FRAUDE DÉCOUVERTE !';money=`Contrebandier ${fmt(r.smugglerDelta)} · Douanier +${r.officerDelta} 💰`;Snd.siren();}
+  else{cls='clean';title='✅ Déclaration conforme';money=`Fouille injustifiée — Contrebandier +${r.smugglerDelta} · Douanier ${fmt(r.officerDelta)} 💰`;Snd.lose();}
+  card.className='rev '+cls;
+  card.innerHTML=`<div class="chest">🧰</div><h2>${title}</h2><div class="who">${esc(r.smugglerName)}</div><div class="revit">${items}</div><div class="money">${money}</div>`;
+  ov.classList.add('show');setTimeout(()=>card.classList.add('open'),60);
+  clearTimeout(showReveal._t);showReveal._t=setTimeout(()=>{ov.classList.remove('show');card.classList.remove('open');},2600);
+}
+
+/* chat */
+$('#csend').onclick=()=>{const i=$('#cinput');const t=i.value.trim();if(t)sendAction({type:'chat',text:t});i.value='';};
+$('#cinput').addEventListener('keydown',e=>{if(e.key==='Enter')$('#csend').click();});
+function renderChat(){
+  const m=$('#cmsgs');if(!m)return;
+  m.innerHTML=(VIEW.chat||[]).map(x=>`<div class="cmsg"><b style="color:${x.color}">${esc(x.name)}:</b> ${esc(x.text)}</div>`).join('');
+  m.scrollTop=m.scrollHeight;
+}
+
+function itemCard(id,extra){const it=ITEMS[id];const c=document.createElement('div');c.className='item '+(it.legal?'legal':'illegal')+(extra?' '+extra:'');
+  c.innerHTML=`<div class="em">${it.em}</div><div class="nm">${it.nm}</div><div class="vl">+${it.value}${it.legal?'':' ⚠'}</div>`;return c;}
+
+ask();
+connect();
+</script>
+</body>
+</html>
