@@ -1,0 +1,19 @@
+{
+  "name": "smuggler-deen-game",
+  "version": "1.0.0",
+  "description": "Jeu multijoueur web de contrebande et corruption (party game de bluff)",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "license": "MIT"
+}

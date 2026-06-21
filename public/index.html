@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Douane & Contrebande</title>
+  <meta name="theme-color" content="#11151c" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- ÉCRAN ACCUEIL -->
+    <section id="screen-home" class="screen active">
+      <div class="home-card">
+        <div class="logo">🕵️ <span>Douane</span> &amp; <span class="contraband">Contrebande</span></div>
+        <p class="tagline">Bluffe. Soudoie. Fouille. Encaisse.</p>
+
+        <label class="field">
+          <span>Ton pseudo</span>
+          <input id="input-name" maxlength="16" placeholder="Ex : Tony" autocomplete="off" />
+        </label>
+
+        <div class="home-actions">
+          <button id="btn-create" class="btn btn-primary">Créer un salon</button>
+          <div class="join-row">
+            <input id="input-code" maxlength="5" placeholder="CODE" autocomplete="off" />
+            <button id="btn-join" class="btn">Rejoindre</button>
+          </div>
+        </div>
+        <p id="home-error" class="error"></p>
+        <p class="hint">3 à 6 joueurs · manches de 2-4 min · jouable au navigateur</p>
+      </div>
+    </section>
+
+    <!-- LOBBY -->
+    <section id="screen-lobby" class="screen">
+      <div class="panel">
+        <div class="lobby-head">
+          <div>
+            <h2>Salon</h2>
+            <div class="code-box">
+              <span id="lobby-code">-----</span>
+              <button id="btn-copy" class="btn btn-small">Copier le lien</button>
+            </div>
+          </div>
+        </div>
+        <div id="lobby-players" class="players-grid"></div>
+        <p id="lobby-info" class="hint"></p>
+        <button id="btn-start" class="btn btn-primary btn-big" disabled>Lancer la partie</button>
+        <button id="btn-leave" class="btn btn-ghost btn-small">Quitter</button>
+      </div>
+      <div class="chat-box" id="chat-box-lobby"></div>
+    </section>
+
+    <!-- JEU -->
+    <section id="screen-game" class="screen">
+      <header class="game-bar">
+        <div class="round-info">Manche <span id="round-now">1</span>/<span id="round-total">8</span></div>
+        <div id="timer" class="timer"></div>
+        <div class="me-coins">💰 <span id="me-coins">20</span></div>
+      </header>
+
+      <div id="scoreboard" class="scoreboard"></div>
+
+      <main id="game-main"></main>
+      <div class="chat-box" id="chat-box-game"></div>
+    </section>
+  </div>
+
+  <!-- OVERLAY DE RÉVÉLATION -->
+  <div id="reveal-overlay" class="reveal-overlay">
+    <div class="reveal-card" id="reveal-card"></div>
+  </div>
+
+  <script src="js/items.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
