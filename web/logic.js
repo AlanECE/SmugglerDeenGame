@@ -4,7 +4,7 @@
 //  Aucun import, aucun timer (contrat de la plateforme).
 // =============================================================
 
-export const meta = { game: "Douane & Contrebande", minPlayers: 1, maxPlayers: 6 };
+export const meta = { game: "Douane & Contrebande", minPlayers: 1, maxPlayers: 10 };
 
 // ---- Paramètres d'équilibrage ----
 const CFG = {
@@ -40,15 +40,18 @@ const ITEMS = {
   watches: { name: "Montres volées", legal: false, cost: 3, value: 7, penalty: 7 },
   // Contrebande ultime : éco spéciale (+30 / -25), exempte du coût d'achat.
   pistol: { name: "Pistolet", legal: false, cost: 0, value: 30, penalty: 25, special: true },
+  // Bombe nucléaire : 1 fois/partie. Si elle passe -> fin de partie, le marchand GAGNE.
+  // Si saisie -> -50 pièces.
+  nuke: { name: "Bombe nucléaire", legal: false, cost: 0, value: 0, penalty: 50, special: true, nuke: true },
 };
 const LEGAL_IDS = Object.keys(ITEMS).filter((k) => ITEMS[k].legal && !ITEMS[k].special);
 
-// Diversité croissante : le panel d'objets s'élargit au fil des manches.
+// Diversité croissante : le panel s'élargit, et l'illégal devient plus risqué au fil des manches.
 function poolForRound(round) {
-  const ids = ["pasta", "eggs", "weed"];          // manche 1 : 3 objets
-  if (round >= 2) ids.push("coffee", "cocaine");  // manche 2 : 5
-  if (round >= 3) ids.push("cheese", "watches");  // manche 3 : 7
-  if (round >= 4) ids.push("fakepapers");         // manche 4+ : 8
+  const ids = ["pasta", "eggs", "weed"];            // manche 1 : illégal peu risqué
+  if (round >= 2) ids.push("coffee", "watches");    // manche 2
+  if (round >= 3) ids.push("cheese", "fakepapers"); // manche 3
+  if (round >= 4) ids.push("cocaine");              // manche 4+ : le plus risqué
   return ids;
 }
 const COLORS = ["#e63946", "#457b9d", "#2a9d8f", "#e9c46a", "#9d4edd", "#f4a261"];
@@ -101,6 +104,10 @@ export function setup(players) {
     begged: [],      // ids ayant déjà mendié cette partie (1 fois max)
     begging: null,   // session de mendicité en cours { id, byName, total, donations:[] }
     debts: {},       // dette morale : beneficiaryId -> { donorId: total donné }
+    cap: 6,          // nombre de joueurs max réglable par l'hôte (3 à 10)
+    nukeRound: 0,    // manche où apparaît la bombe nucléaire
+    nukeSpawned: false,
+    nukeWinner: null,// marchand qui a fait passer la bombe (gagne la partie)
   };
   for (const id of players) addToRoster(s, id, null);
   return s;
@@ -108,7 +115,7 @@ export function setup(players) {
 
 function addToRoster(s, id, name) {
   if (s.players.some((p) => p.id === id)) return;
-  if (s.players.length >= meta.maxPlayers) return;
+  if (s.players.length >= (s.cap || meta.maxPlayers)) return;
   const idx = s.players.length;
   s.players.push({
     id,
@@ -140,6 +147,15 @@ export function validateAction(state, playerId, action) {
     if (state.phase !== "lobby") return { ok: false, error: "Partie déjà lancée" };
     if (!isHost) return { ok: false, error: "Seul l'hôte peut lancer" };
     if (state.players.length < CFG.startMin) return { ok: false, error: `Il faut au moins ${CFG.startMin} joueurs` };
+    return { ok: true };
+  }
+
+  if (t === "set_cap") {
+    if (state.phase !== "lobby") return { ok: false, error: "Réglable seulement dans le salon" };
+    if (!isHost) return { ok: false, error: "Seul l'hôte règle le nombre de joueurs" };
+    const n = parseInt(action.n, 10);
+    if (!(n >= CFG.startMin && n <= meta.maxPlayers)) return { ok: false, error: `Entre ${CFG.startMin} et ${meta.maxPlayers}` };
+    if (n < state.players.length) return { ok: false, error: "Déjà trop de joueurs présents" };
     return { ok: true };
   }
 
@@ -269,9 +285,20 @@ export function applyAction(state, playerId, action) {
     return s;
   }
 
+  if (t === "set_cap") {
+    s.cap = parseInt(action.n, 10);
+    return s;
+  }
+
   if (t === "start") {
     s.round = 0;
     s.officerStartIndex = randInt(s.players.length);
+    // Assez de manches pour que chacun soit douanier exactement 2 fois.
+    s.totalRounds = 2 * s.players.length;
+    // La bombe nucléaire apparaît une seule fois, dans une manche aléatoire (jamais la 1re).
+    s.nukeSpawned = false;
+    s.nukeWinner = null;
+    s.nukeRound = 2 + randInt(Math.max(1, s.totalRounds - 1)); // entre 2 et totalRounds
     nextRound(s);
     return s;
   }
@@ -325,6 +352,8 @@ export function applyAction(state, playerId, action) {
     s.roundEvents.push(res);
     s.lastReveal = res;
     s.inspectIndex += 1;
+    // La bombe nucléaire qui passe met FIN à la partie : ce marchand gagne.
+    if (res.nukePassed) { s.nukeWinner = res.smugglerId; s.phase = "ended"; return s; }
     if (s.inspectIndex >= s.inspectOrder.length) s.phase = "summary";
     return s;
   }
@@ -395,6 +424,9 @@ export function applyAction(state, playerId, action) {
     s.begged = [];
     s.begging = null;
     s.debts = {};
+    s.nukeSpawned = false;
+    s.nukeWinner = null;
+    s.nukeRound = 0;
     addToRoster(s, playerId, keptName);
     if (s.players[0]) s.players[0].avatar = keptAvatar;
     return s;
@@ -433,6 +465,16 @@ function nextRound(s) {
       h[randInt(h.length)] = "pistol";
     }
   }
+  // Bombe nucléaire : une seule fois dans la partie, à la manche tirée au sort.
+  if (s.round === s.nukeRound && !s.nukeSpawned) {
+    const sids = smugglerIds(s);
+    if (sids.length) {
+      const lucky = sids[randInt(sids.length)];
+      const h = s.subs[lucky].hand;
+      h[randInt(h.length)] = "nuke";
+      s.nukeSpawned = true;
+    }
+  }
   s.phase = "prepare";
 }
 
@@ -456,7 +498,8 @@ function resolve(s, smugglerId, action) {
   const res = {
     smugglerId, smugglerName: smuggler.name, action,
     items: sub.items, decl: sub.decl, bribe: sub.bribe, cost: sub.cost || 0,
-    isLie, hasContraband, hasPistol: sub.items.includes("pistol"),
+    isLie, hasContraband, hasPistol: sub.items.includes("pistol"), hasNuke: sub.items.includes("nuke"),
+    nukePassed: sub.items.includes("nuke") && action === "pass",
     outcome: null, smugglerDelta: 0, officerDelta: 0,
   };
 
@@ -524,9 +567,9 @@ export function viewFor(state, playerId) {
     you: playerId,
     inRoster: !!me,
     cfg: {
-      startMin: CFG.startMin, maxPlayers: meta.maxPlayers, maxBribe: CFG.maxBribe,
-      cargoMin: CFG.cargoMin, cargoMax: CFG.cargoMax, startingCoins: CFG.startingCoins,
-      begThreshold: CFG.begThreshold,
+      startMin: CFG.startMin, maxPlayers: state.cap || meta.maxPlayers, hardMax: meta.maxPlayers,
+      maxBribe: CFG.maxBribe, cargoMin: CFG.cargoMin, cargoMax: CFG.cargoMax,
+      startingCoins: CFG.startingCoins, begThreshold: CFG.begThreshold,
     },
     players: state.players.map((p) => ({
       id: p.id, name: p.name, color: p.color, avatar: p.avatar || 0, coins: p.coins,
@@ -574,12 +617,18 @@ export function viewFor(state, playerId) {
   if (state.phase === "summary") v.summary = { events: state.roundEvents };
 
   if (state.phase === "ended") {
-    const ranking = [...state.players].sort((a, b) => b.coins - a.coins);
+    let ranking = [...state.players].sort((a, b) => b.coins - a.coins);
+    // La bombe nucléaire prime sur le classement : son porteur gagne d'office.
+    if (state.nukeWinner) {
+      const win = findPlayer(state, state.nukeWinner);
+      if (win) ranking = [win, ...ranking.filter((p) => p.id !== state.nukeWinner)];
+    }
     v.final = {
       ranking: ranking.map((p, i) => ({
-        rank: i + 1, id: p.id, name: p.name, color: p.color, coins: p.coins, stats: p.stats,
+        rank: i + 1, id: p.id, name: p.name, color: p.color, avatar: p.avatar || 0, coins: p.coins, stats: p.stats,
       })),
       awards: computeAwards(state),
+      nukeWinner: state.nukeWinner || null,
     };
   }
 

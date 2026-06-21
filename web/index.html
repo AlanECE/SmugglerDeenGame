@@ -77,6 +77,10 @@ h1{font-size:24px;text-align:center}h2{font-size:19px}h3{font-size:15px;margin-b
 .seat.done{opacity:.55}
 .seat .badge{position:absolute;top:-4px;right:6px;font-size:15px;filter:drop-shadow(0 1px 1px #000)}
 .bcenter{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;font-weight:800;color:#fff;text-shadow:0 2px 4px #000;font-size:13px;width:56%;line-height:1.3}
+.board.crowded .seat{width:54px}
+.board.crowded .seat .av{width:34px;height:34px}
+.board.crowded .seatname{font-size:9px}
+.board.crowded .seatcoins{font-size:9px}
 @keyframes pulseB{0%,100%{box-shadow:0 0 0 2px var(--blue)}50%{box-shadow:0 0 0 6px rgba(79,163,255,.45)}}
 @keyframes pulseR{0%,100%{box-shadow:0 0 0 3px var(--red)}50%{box-shadow:0 0 0 7px rgba(193,18,31,.5)}}
 
@@ -174,6 +178,19 @@ td:first-child,th:first-child{text-align:left}
 .rev.pistol h2{color:#ff6b6b}
 .rev .pistolbig{font-size:64px;animation:gunshake .5s}
 @keyframes gunshake{0%,100%{transform:translateX(0) rotate(0)}20%{transform:translateX(-8px) rotate(-8deg)}60%{transform:translateX(8px) rotate(8deg)}}
+.item.nuke{border:2px solid #b5e853;background:radial-gradient(circle at 50% 40%,#3a4d12,#15180b);box-shadow:0 0 18px rgba(181,232,83,.6);position:relative}
+.item.nuke .nm{color:#d9ff7a}
+.item.nuke::after{content:"☢";position:absolute;top:2px;right:3px;font-size:11px}
+.rev.nuke{border-color:#b5e853;box-shadow:0 0 90px rgba(181,232,83,.8)}
+.rev.nuke h2{color:#d9ff7a}
+.rev .nukebig{font-size:70px;animation:nukepulse .7s infinite alternate}
+@keyframes nukepulse{from{transform:scale(1);filter:drop-shadow(0 0 6px #b5e853)}to{transform:scale(1.15);filter:drop-shadow(0 0 22px #d9ff7a)}}
+.fsov.nukeend{background:radial-gradient(circle at 50% 40%,#2a3a0d,#0a0a04)}
+/* résumé : lignes joueurs avec avatars + totaux colorés */
+.sumrows{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+.sumrow{display:flex;align-items:center;gap:10px;background:var(--panel2);border-radius:10px;padding:8px 12px}
+.sumrow .rname{flex:1;text-align:left;font-weight:700}
+.evlist{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
 
 /* badge bienfaiteur */
 .benef{display:inline-block;background:#2a9d8f;color:#fff;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700;margin-top:6px}
@@ -256,8 +273,9 @@ const ITEMS={
   fakepapers:{nm:"Faux papiers",em:"📄",legal:false,cost:4,value:8,penalty:8,col:"#cdb4db"},
   watches:{nm:"Montres volées",em:"⌚",legal:false,cost:3,value:7,penalty:7,col:"#bc6c25"},
   pistol:{nm:"Pistolet",em:"🔫",legal:false,cost:0,value:30,penalty:25,col:"#cdd2d6",special:true},
+  nuke:{nm:"Bombe nucléaire",em:"☢️",legal:false,cost:0,value:0,penalty:50,col:"#b5e853",special:true,nuke:true},
 };
-const INTRO_MS=4000, NEGO_MS=20000, SUMMARY_MS=5000, BEG_MS=60000;
+const INTRO_MS=4000, NEGO_MS=20000, SUMMARY_MS=5000, OFFICERPOP_MS=3500, BEG_MS=60000;
 const LEGAL=Object.keys(ITEMS).filter(k=>ITEMS[k].legal);
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -300,7 +318,7 @@ let myAvatar=parseInt(localStorage.getItem('sd-av')||'0',10)||0;
 let VIEW=null, prep=null, lastPrepRound=-1, lastRevKey=null, flashMsg='';
 let announcedRound=-1, timerRound=-1, prepDeadline=0, autoLockedRound=-1, forcedRound=-1, lastHello=0;
 let ctrlKey=null, ctrlStart=0, ctrlPhase='wait', ctrlAutoKey=null, revealUntil=0;
-let sumRound=-1, sumDeadline=0, sumNextKey=null, sumShown=false;
+let sumRound=-1, sumDeadline=0, sumNextKey=null, sumShown=false, offPopShown=false, offDeadline=0;
 let begSeen=null, begStartLocal=0, begEndKey=null;
 
 /* ============ websocket ============ */
@@ -341,8 +359,11 @@ function render(){
   } else { ctrlKey=null; }
   // résumé plein écran : on montre D'ABORD le résultat de la dernière inspection,
   // PUIS (après l'animation) le résumé 5s, PUIS la manche suivante.
-  if(VIEW.phase==='summary'){ if(VIEW.round!==sumRound){sumRound=VIEW.round;sumShown=false;sumNextKey=null;sumDeadline=Math.max(Date.now(),revealUntil)+SUMMARY_MS;} }
-  else { hide('#sumov'); sumRound=-1; sumShown=false; }
+  if(VIEW.phase==='summary'){
+    if(VIEW.round!==sumRound){sumRound=VIEW.round;sumShown=false;offPopShown=false;sumNextKey=null;sumDeadline=Math.max(Date.now(),revealUntil)+SUMMARY_MS;}
+    if(!sumShown&&Date.now()>=revealUntil){sumShown=true;sumDeadline=Date.now()+SUMMARY_MS;showSumOverlay();}
+  }
+  else { hide('#sumov'); sumRound=-1; sumShown=false; offPopShown=false; }
   // mendicité (overlay temps réel)
   updateBegging();
   if(VIEW.phase==='lobby')renderLobby();else renderGame();
@@ -389,7 +410,7 @@ function boardHtml(centerHtml){
       <div class="seatcoins">${p.coins}💰</div></div>`;
   });
   const bg=isUrl(BOARD)?`style="background-image:url('${BOARD}')"`:'';
-  return `<div class="board" ${bg}><div class="bcenter">${centerHtml||''}</div>${nodes}</div>`;
+  return `<div class="board ${n>6?'crowded':''}" ${bg}><div class="bcenter">${centerHtml||''}</div>${nodes}</div>`;
 }
 
 function renderLobby(){
@@ -407,6 +428,12 @@ function renderLobby(){
      <h3>Choisis ton avatar</h3>
      <div class="avgrid" id="avgrid">${AVATARS.map((a,i)=>`<div class="avpick ${myAv===i?'sel':''}" data-i="${i}"><img src="${a.url}" alt="${a.name}" onerror="this.parentNode.textContent='?'"></div>`).join('')}</div>
    </div>
+   ${isHost?`<div class="card" style="text-align:center">
+     <h3>Nombre de joueurs</h3>
+     <div class="stepper" style="display:inline-flex;margin:6px 0"><button class="btn btn-small" id="capm">−</button>
+       <span style="min-width:36px;font-size:20px;font-weight:800">${VIEW.cfg.maxPlayers}</span><button class="btn btn-small" id="capp">+</button></div>
+     <p class="muted" style="font-size:13px">Chacun sera douanier <b>2 fois</b> → ${2*Math.max(VIEW.players.length,VIEW.cfg.startMin)} manches environ (3 à 10 joueurs)</p>
+   </div>`:`<div class="card" style="text-align:center"><p class="muted">Partie à ${VIEW.cfg.maxPlayers} joueurs max — chacun douanier 2 fois</p></div>`}
    <div class="card">
      <h2>Joueurs (${VIEW.players.length}/${VIEW.cfg.maxPlayers})</h2>
      <div class="score" style="margin-top:12px">${VIEW.players.map(p=>`<span class="chip ${p.id===VIEW.you?'me':''}">
@@ -417,6 +444,9 @@ function renderLobby(){
    </div>`;
   $('#copy').onclick=()=>{const i=$('#invlink');i.select();navigator.clipboard&&navigator.clipboard.writeText(location.href);const b=$('#copy');b.textContent='Copié ✓';setTimeout(()=>b.textContent='Copier',1500);};
   document.querySelectorAll('.avpick').forEach(el=>el.onclick=()=>{myAvatar=+el.dataset.i;localStorage.setItem('sd-av',myAvatar);Snd.pick();sendAction({type:'avatar',avatar:myAvatar});});
+  const cm=$('#capm'),cp=$('#capp');
+  if(cm)cm.onclick=()=>{Snd.tap();sendAction({type:'set_cap',n:Math.max(VIEW.cfg.startMin,VIEW.cfg.maxPlayers-1)});};
+  if(cp)cp.onclick=()=>{Snd.tap();sendAction({type:'set_cap',n:Math.min(VIEW.cfg.hardMax,VIEW.cfg.maxPlayers+1)});};
   const sb=$('#startbtn');if(sb)sb.onclick=()=>{Snd.whoosh();sendAction({type:'start'});};
 }
 
@@ -594,7 +624,8 @@ function srow(e){const items=e.items.map(id=>ITEMS[id].em).join(' ');const net=e
 function renderEnded(ph){
   const f=VIEW.final;const isHost=VIEW.hostId===VIEW.you;
   if(!renderEnded.done){renderEnded.done=true;Snd.win();}
-  ph.innerHTML=`<div class="card"><h2>🏁 Fin de la partie</h2>
+  const nukeBanner=f.nukeWinner?`<div class="card" style="text-align:center;border-color:#b5e853;background:radial-gradient(circle at 50% 40%,rgba(181,232,83,.15),transparent)"><div style="font-size:40px">☢️</div><b>${esc((f.ranking.find(x=>x.id===f.nukeWinner)||{}).name||'')}</b> a fait passer la bombe nucléaire et <b>remporte la partie</b> !</div>`:'';
+  ph.innerHTML=`${nukeBanner}<div class="card"><h2>🏁 Fin de la partie</h2>
     <div style="margin:14px 0">${f.ranking.map(r=>`<div class="rrow ${r.rank===1?'gold':''}"><span class="rpos">${r.rank===1?'👑':r.rank}</span>
       ${avImg(pById(r.id)?pById(r.id).avatar:0,'big')}<span class="rnm">${esc(r.name)}</span><b>${r.coins} 💰</b></div>`).join('')}</div>
     ${f.awards.length?`<h3>Trophées</h3>${f.awards.map(a=>`<div class="award"><span class="ae">${a.emoji}</span><span><b>${a.label}</b> — ${esc(a.name)} (${a.value})</span></div>`).join('')}`:''}
@@ -626,6 +657,11 @@ function showReveal(r){
     title=r.outcome==='busted'?'🔫 PISTOLET SAISI !':'🔫 LE PISTOLET PASSE !';
     Snd.siren();setTimeout(()=>r.outcome==='busted'?Snd.lose():Snd.win(),300);
   }
+  if(r.hasNuke){
+    cls='nuke '+cls;top='<div class="nukebig">☢️</div>';
+    title=r.nukePassed?'☢️ BOMBE NUCLÉAIRE PASSÉE !':'☢️ BOMBE DÉSAMORCÉE !';
+    Snd.siren();setTimeout(()=>Snd.siren(),260);setTimeout(()=>r.nukePassed?Snd.win():Snd.lose(),520);
+  }
   // avatars (style plateau) : marchand vs douanier
   const sa=pById(r.smugglerId), oa=VIEW.players.find(p=>p.isOfficer);
   const vs=r.action==='pass'?'➜':'🔍';
@@ -634,12 +670,14 @@ function showReveal(r){
     <div class="vs">${vs}</div>
     <div class="revav off">${avImg(oa?oa.avatar:0,'huge')}<div class="rname">👮 ${esc(oa?oa.name:'Douanier')}</div></div></div>`;
   const net=r.smugglerDelta-(r.cost||0);
-  const money=`<div>Marchand <b>${fmt(net)}</b> 💰 <small>(coût −${r.cost||0} · contrôle ${fmt(r.smugglerDelta)})</small></div>
-    <div>Douanier <b>${fmt(r.officerDelta)}</b> 💰</div>`;
-  card.className='rev '+cls+(r.outcome==='busted'||r.hasPistol?' flash':'');
+  let money;
+  if(r.nukePassed){money=`<div style="font-size:18px">🏆 <b>${esc(r.smugglerName)}</b> remporte la partie !</div>`;}
+  else{money=`<div>Marchand <b>${fmt(net)}</b> 💰 <small>(coût −${r.cost||0} · contrôle ${fmt(r.smugglerDelta)})</small></div>
+    <div>Douanier <b>${fmt(r.officerDelta)}</b> 💰</div>`;}
+  card.className='rev '+cls+(r.outcome==='busted'||r.hasPistol||r.hasNuke?' flash':'');
   card.innerHTML=`${top}<h2>${title}</h2>${avs}<div class="revit">${items}</div><div class="money">${money}</div>`;
   ov.classList.add('show');setTimeout(()=>card.classList.add('open'),60);
-  const dur=r.hasPistol?3900:(r.outcome==='busted'?3200:2400);
+  const dur=r.hasNuke?4600:r.hasPistol?3900:(r.outcome==='busted'?3200:2400);
   revealUntil=Date.now()+dur;
   clearTimeout(showReveal._t);showReveal._t=setTimeout(()=>{ov.classList.remove('show');card.classList.remove('open');},dur);
 }
@@ -651,16 +689,38 @@ function renderChat(){const m=$('#cmsgs');if(!m)return;
   m.innerHTML=(VIEW.chat||[]).map(x=>`<div class="cmsg"><b style="color:${x.color}">${esc(x.name)}:</b> ${esc(x.text)}</div>`).join('');
   m.scrollTop=m.scrollHeight;}
 
-function itemCard(id,extra){const it=ITEMS[id];const c=document.createElement('div');c.className='item '+(it.legal?'legal':'illegal')+(it.special?' pistol':'')+(extra?' '+extra:'');
-  c.innerHTML=`<div class="em">${it.em}</div><div class="nm">${it.nm}</div><div class="vl">−${it.cost}→+${it.value}</div>`;return c;}
+function itemCard(id,extra){const it=ITEMS[id];const c=document.createElement('div');c.className='item '+(it.legal?'legal':'illegal')+(it.nuke?' nuke':it.special?' pistol':'')+(extra?' '+extra:'');
+  const vl=it.nuke?'FIN / −50':`−${it.cost}→+${it.value}`;
+  c.innerHTML=`<div class="em">${it.em}</div><div class="nm">${it.nm}</div><div class="vl">${vl}</div>`;return c;}
 
-/* ---- résumé plein écran ---- */
+/* ---- résumé plein écran : avatars + total gagné/perdu coloré ---- */
+function roundTally(){
+  const ev=(VIEW.summary&&VIEW.summary.events)||[];
+  const t={};
+  ev.forEach(e=>{t[e.smugglerId]=(t[e.smugglerId]||0)+(e.smugglerDelta-(e.cost||0));t[VIEW.officerId]=(t[VIEW.officerId]||0)+e.officerDelta;});
+  return t;
+}
+function tcol(v){return v>0?'var(--green)':v<0?'#ff6b6b':'#fff';}
 function showSumOverlay(){
   const ev=(VIEW.summary&&VIEW.summary.events)||[];
-  $('#sumov-in').innerHTML=`<h2>Bilan de la manche ${VIEW.round}</h2>
-    <div style="margin:14px 0">${ev.map(srow).join('')||'<p class="muted">—</p>'}</div>
-    <div class="muted">Manche suivante dans un instant…</div>`;
+  const t=roundTally();
+  const rows=VIEW.players.map(p=>{const v=t[p.id]||0;
+    return `<div class="sumrow">${avImg(p.avatar,'')}<span class="rname">${p.isOfficer?'👮 ':''}${esc(p.name)}</span>
+      <b style="color:${tcol(v)}">${v>0?'+':''}${v} 💰</b></div>`;}).join('');
+  $('#sumov-in').innerHTML=`<h2>Bilan de la manche ${VIEW.round}/${VIEW.totalRounds}</h2>
+    <div class="sumrows">${rows}</div>
+    <div class="evlist">${ev.map(srow).join('')||'<p class="muted">—</p>'}</div>`;
   $('#sumov').classList.add('show');
+}
+function showOfficerPop(){
+  const off=VIEW.players.find(p=>p.isOfficer);if(!off){return;}
+  const v=roundTally()[off.id]||0;
+  const verb=v>0?'a empoché':v<0?'a perdu':"n'a rien gagné";
+  $('#sumov-in').innerHTML=`<div class="fscard" style="text-align:center">
+    <div class="muted">Le douanier de la manche ${VIEW.round}</div>
+    ${avImg(off.avatar,'huge')}<h2 style="margin:8px 0">👮 ${esc(off.name)}</h2>
+    <div style="font-size:38px;font-weight:800;color:${tcol(v)}">${v>0?'+':''}${v} 💰</div>
+    <div class="muted">${verb} ce tour</div></div>`;
 }
 
 /* ---- mendicité (overlay temps réel) ---- */
@@ -746,10 +806,11 @@ setInterval(()=>{
     return;
   }
 
-  // --- résumé : on attend la fin de l'animation du dernier résultat, puis 5s, puis suite ---
+  // --- résumé : résultat -> bilan (5s) -> pop-up bilan du douanier (3,5s) -> suite ---
   if(VIEW.phase==='summary'){
     if(!sumShown&&now>=revealUntil){sumShown=true;sumDeadline=now+SUMMARY_MS;showSumOverlay();}
-    if(sumShown&&now>=sumDeadline&&iAmDriver&&sumNextKey!==sumRound){sumNextKey=sumRound;hide('#sumov');sendAction({type:'next'});}
+    else if(sumShown&&!offPopShown&&now>=sumDeadline){offPopShown=true;offDeadline=now+OFFICERPOP_MS;showOfficerPop();}
+    else if(offPopShown&&now>=offDeadline&&iAmDriver&&sumNextKey!==sumRound){sumNextKey=sumRound;hide('#sumov');sendAction({type:'next'});}
     return;
   }
 },1000);
