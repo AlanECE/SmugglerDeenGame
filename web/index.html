@@ -346,6 +346,7 @@ function flash(t){flashMsg=t;const el=$('#errline');if(el)el.textContent=t;setTi
 
 /* modal pseudo */
 function ask(){if(myName){$('#namemodal').classList.remove('show');return;}$('#namemodal').classList.add('show');$('#nameinput').value=myName;$('#nameinput').focus();}
+function openNameModal(){$('#nameinput').value=myName;$('#namemodal').classList.add('show');setTimeout(()=>$('#nameinput').focus(),50);}
 $('#namego').onclick=()=>{const n=$('#nameinput').value.trim();if(!n)return;myName=n;localStorage.setItem('sd-name',n);$('#namemodal').classList.remove('show');Snd.pick();sendAction({type:'hello',name:n});sendAction({type:'avatar',avatar:myAvatar});};
 $('#nameinput').addEventListener('keydown',e=>{if(e.key==='Enter')$('#namego').click();});
 
@@ -436,15 +437,16 @@ function renderLobby(){
      <div class="code-row"><input readonly id="invlink" value="${esc(location.href)}"><button class="btn btn-small" id="copy">Copier</button></div>
    </div>
    <div class="card">
-     <h3>Choisis ton avatar</h3>
+     <h3>Ton perso</h3>
+     <div style="margin-bottom:10px">Pseudo : <b>${esc(myName||'—')}</b> <button class="btn btn-small" id="editname">✏️ Modifier</button></div>
      <div class="avgrid" id="avgrid">${AVATARS.map((a,i)=>`<div class="avpick ${myAv===i?'sel':''}" data-i="${i}"><img src="${a.url}" alt="${a.name}" onerror="this.parentNode.textContent='?'"></div>`).join('')}</div>
    </div>
    ${isHost?`<div class="card" style="text-align:center">
-     <h3>Nombre de joueurs</h3>
+     <h3>Nombre de joueurs prévu</h3>
      <div class="stepper" style="display:inline-flex;margin:6px 0"><button class="btn btn-small" id="capm">−</button>
        <span style="min-width:36px;font-size:20px;font-weight:800">${VIEW.cfg.maxPlayers}</span><button class="btn btn-small" id="capp">+</button></div>
-     <p class="muted" style="font-size:13px">Chacun sera douanier <b>2 fois</b> → ${2*Math.max(VIEW.players.length,VIEW.cfg.startMin)} manches environ (3 à 10 joueurs)</p>
-   </div>`:`<div class="card" style="text-align:center"><p class="muted">Partie à ${VIEW.cfg.maxPlayers} joueurs max — chacun douanier 2 fois</p></div>`}
+     <p class="muted" style="font-size:13px">S'agrandit tout seul si d'autres rejoignent (max 10). Tout le monde joue, aucun spectateur. Chacun douanier <b>2 fois</b> → ${2*Math.max(VIEW.players.length,VIEW.cfg.startMin)} manches.</p>
+   </div>`:`<div class="card" style="text-align:center"><p class="muted">${VIEW.players.length} joueur(s) · chacun douanier 2 fois</p></div>`}
    <div class="card">
      <h2>Joueurs (${VIEW.players.length}/${VIEW.cfg.maxPlayers})</h2>
      <div class="score" style="margin-top:12px">${VIEW.players.map(p=>`<span class="chip ${p.id===VIEW.you?'me':''}">
@@ -455,6 +457,7 @@ function renderLobby(){
    </div>`;
   $('#copy').onclick=()=>{const i=$('#invlink');i.select();navigator.clipboard&&navigator.clipboard.writeText(location.href);const b=$('#copy');b.textContent='Copié ✓';setTimeout(()=>b.textContent='Copier',1500);};
   document.querySelectorAll('.avpick').forEach(el=>el.onclick=()=>{myAvatar=+el.dataset.i;localStorage.setItem('sd-av',myAvatar);Snd.pick();sendAction({type:'avatar',avatar:myAvatar});});
+  const en=$('#editname');if(en)en.onclick=openNameModal;
   const cm=$('#capm'),cp=$('#capp');
   if(cm)cm.onclick=()=>{Snd.tap();sendAction({type:'set_cap',n:Math.max(VIEW.cfg.startMin,VIEW.cfg.maxPlayers-1)});};
   if(cp)cp.onclick=()=>{Snd.tap();sendAction({type:'set_cap',n:Math.min(VIEW.cfg.hardMax,VIEW.cfg.maxPlayers+1)});};

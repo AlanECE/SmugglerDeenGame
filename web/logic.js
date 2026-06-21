@@ -129,7 +129,7 @@ export function setup(players) {
 
 function addToRoster(s, id, name) {
   if (s.players.some((p) => p.id === id)) return;
-  if (s.players.length >= (s.cap || meta.maxPlayers)) return;
+  if (s.players.length >= meta.maxPlayers) return; // seule limite dure : 10
   const idx = s.players.length;
   s.players.push({
     id,
@@ -143,6 +143,8 @@ function addToRoster(s, id, name) {
   });
   // L'hôte est toujours un joueur présent (utile après une revanche qui réinitialise la liste).
   if (!s.players.some((p) => p.id === s.hostId)) s.hostId = s.players[0].id;
+  // Le nombre de joueurs prévu s'agrandit automatiquement si plus de monde rejoint (jusqu'à 10).
+  if (s.players.length > (s.cap || 0)) s.cap = s.players.length;
 }
 
 // =============================================================
@@ -290,7 +292,8 @@ export function applyAction(state, playerId, action) {
   if (t === "hello") {
     const name = String(action.name || "Joueur").slice(0, 16) || "Joueur";
     const existing = findPlayer(s, playerId);
-    if (existing) existing.name = name;
+    // Le pseudo n'est modifiable que dans le salon ; il est figé au lancement.
+    if (existing) { if (s.phase === "lobby") existing.name = name; }
     else if (s.phase === "lobby") addToRoster(s, playerId, name);
     return s;
   }
