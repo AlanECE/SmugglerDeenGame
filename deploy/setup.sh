@@ -89,6 +89,12 @@ EOF
 fi
 
 # -------- Nginx reverse proxy (avec support WebSocket) --------
+# Libère le port 80 si Apache l'occupe
+if systemctl is-active --quiet apache2 2>/dev/null; then
+  echo "==> Désactivation d'Apache (occupe le port 80)"
+  systemctl disable --now apache2 || true
+fi
+
 SERVER_NAME="${DOMAIN:-_}"
 echo "==> Configuration de Nginx (server_name: $SERVER_NAME)"
 cat > /etc/nginx/sites-available/smuggler <<EOF
