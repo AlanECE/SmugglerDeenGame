@@ -7,7 +7,7 @@
 <style>
 :root{
   --bg:#11151c;--panel:#1c2230;--panel2:#232b3b;--ink:#eef1f6;--muted:#9aa6b8;
-  --gold:#e9c46a;--gold2:#d4a017;--red:#c1121f;--redd:#7a0c14;--green:#4f9d69;
+  --gold:#e9c46a;--gold2:#d4a017;--red:#c1121f;--redd:#7a0c14;--green:#4f9d69;--blue:#4fa3ff;
   --cream:#f4f1de;--line:#2c3547;--r:14px;--sh:0 10px 30px rgba(0,0,0,.45);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -46,13 +46,13 @@ h1{font-size:24px;text-align:center}h2{font-size:19px}h3{font-size:15px;margin-b
 .bar{display:flex;justify-content:space-between;align-items:center;background:var(--panel);
   border:1px solid var(--line);border-radius:var(--r);padding:11px 14px;margin-bottom:10px;gap:8px}
 .bar b{color:var(--gold)}
-.score{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-bottom:12px}
+.cd{font-weight:700;color:var(--muted)}.cd.urgent{color:#ff6b6b}
 .chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);
   border-radius:999px;padding:5px 11px 5px 5px;font-size:14px;font-weight:600}
 .chip.me{border-color:var(--gold)}.chip b{color:var(--gold)}
-.chip.ready,.chip.resolved{border-color:var(--green)}
-.chip.current{border-color:var(--gold);box-shadow:0 0 0 2px rgba(233,196,106,.3)}
+.chip.ready{border-color:var(--green)}
 .tag{font-size:11px;background:var(--gold);color:#2a1d00;padding:2px 7px;border-radius:6px}
+.score{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-bottom:12px}
 
 .code-row{display:flex;gap:8px;align-items:center;margin-top:8px}
 .code-row input{font-size:13px}
@@ -61,6 +61,24 @@ h1{font-size:24px;text-align:center}h2{font-size:19px}h3{font-size:15px;margin-b
 .avpick{border-radius:50%;border:2px solid var(--line);overflow:hidden;cursor:pointer;aspect-ratio:1;background:#141a24}
 .avpick img{width:100%;height:100%;object-fit:cover;display:block}
 .avpick.sel{border-color:var(--gold);box-shadow:0 0 0 2px rgba(233,196,106,.4)}
+
+/* PLATEAU */
+.board{position:relative;width:min(340px,84vw);aspect-ratio:1;margin:0 auto 8px;border-radius:50%;
+  background-size:cover;background-position:center;box-shadow:var(--sh);border:3px solid var(--gold2);
+  background-color:#143524;background-image:radial-gradient(circle at 50% 42%,#235c3f,#102b1d 72%)}
+.seat{position:absolute;transform:translate(-50%,-50%);text-align:center;width:72px}
+.seat .av{width:46px;height:46px}
+.seatname{font-size:11px;font-weight:700;margin-top:2px;text-shadow:0 1px 3px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seatcoins{font-size:10px;color:var(--gold);text-shadow:0 1px 2px #000}
+.seat.officer .av{border-color:var(--gold);box-shadow:0 0 0 3px var(--gold),0 0 16px rgba(233,196,106,.8)}
+.seat.prepping .av{border-color:var(--blue);animation:pulseB 1.1s infinite}
+.seat.ready .av{border-color:var(--green);box-shadow:0 0 0 3px var(--green)}
+.seat.target .av{border-color:var(--red);animation:pulseR .8s infinite}
+.seat.done{opacity:.55}
+.seat .badge{position:absolute;top:-4px;right:6px;font-size:15px;filter:drop-shadow(0 1px 1px #000)}
+.bcenter{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;font-weight:800;color:#fff;text-shadow:0 2px 4px #000;font-size:13px;width:56%;line-height:1.3}
+@keyframes pulseB{0%,100%{box-shadow:0 0 0 2px var(--blue)}50%{box-shadow:0 0 0 6px rgba(79,163,255,.45)}}
+@keyframes pulseR{0%,100%{box-shadow:0 0 0 3px var(--red)}50%{box-shadow:0 0 0 7px rgba(193,18,31,.5)}}
 
 .hand{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .coffre{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -81,11 +99,9 @@ h1{font-size:24px;text-align:center}h2{font-size:19px}h3{font-size:15px;margin-b
 .dchip.empty{background:transparent;color:var(--muted);font-weight:400;cursor:default;border:1px dashed var(--line)}
 #brange{width:100%;accent-color:var(--gold);height:36px}
 
-.queue{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-bottom:14px}
-.suspect{text-align:center}
-.declbox{background:#141a24;border-radius:12px;padding:16px;margin:12px 0}
+.declbox{background:#141a24;border-radius:12px;padding:16px;margin:12px 0;text-align:center}
 .declbox .dl{font-size:12px;color:var(--muted)}.declbox .dv{font-size:22px;font-weight:800;margin-top:6px}
-.bribebox{padding:12px;border-radius:10px;background:#141a24;color:var(--muted);margin-bottom:16px}
+.bribebox{padding:12px;border-radius:10px;background:#141a24;color:var(--muted);margin-bottom:16px;text-align:center}
 .bribebox.has{background:rgba(233,196,106,.14);color:var(--gold);font-size:17px}
 .decide{display:grid;grid-template-columns:1fr;gap:12px}
 
@@ -107,19 +123,31 @@ td:first-child,th:first-child{text-align:left}
 .cmsg{margin-bottom:4px;line-height:1.4;word-break:break-word}
 .cin{display:flex;gap:8px;padding:8px;border-top:1px solid var(--line)}.cin input{flex:1}
 
+/* annonce du douanier */
+.announce{position:fixed;inset:0;background:rgba(5,8,12,.92);display:none;place-items:center;z-index:55;backdrop-filter:blur(3px)}
+.announce.show{display:grid;animation:fade .2s}
+.announce .inner{text-align:center;animation:apop .5s cubic-bezier(.2,1.4,.5,1)}
+.announce .av{width:120px;height:120px;border-width:3px;border-color:var(--gold);box-shadow:0 0 40px rgba(233,196,106,.6)}
+.announce h2{margin:14px 0 4px;font-size:26px}
+.announce .sub{color:var(--gold);font-weight:700;font-size:18px}
+@keyframes apop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
+
+/* reveal */
 .ov{position:fixed;inset:0;background:rgba(5,8,12,.82);display:none;place-items:center;z-index:50;backdrop-filter:blur(3px)}
 .ov.show{display:grid;animation:fade .2s}
-.rev{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:26px 28px;text-align:center;width:min(420px,92vw);transform:scale(.8);opacity:0;transition:transform .35s cubic-bezier(.2,1.3,.5,1),opacity .25s}
+.rev{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:24px 26px;text-align:center;width:min(420px,92vw);transform:scale(.8);opacity:0;transition:transform .35s cubic-bezier(.2,1.3,.5,1),opacity .25s}
 .rev.open{transform:scale(1);opacity:1}
 .rev.bust{border-color:var(--red);box-shadow:0 0 60px rgba(193,18,31,.6)}
 .rev.pass{border-color:var(--gold);box-shadow:0 0 50px rgba(233,196,106,.4)}
 .rev.clean{border-color:var(--green);box-shadow:0 0 50px rgba(79,157,105,.4)}
 .rev .chest{font-size:54px;animation:shake .5s}
-.rev .caughtimg{width:160px;height:160px;border-radius:14px;object-fit:cover;margin:4px auto 8px;display:block;animation:bustpop .45s cubic-bezier(.2,1.4,.5,1)}
+.rev .scene{width:170px;height:170px;border-radius:14px;object-fit:cover;margin:2px auto 8px;display:block}
+.rev.bust .scene{animation:bustpop .45s cubic-bezier(.2,1.4,.5,1)}
+.rev.pass .scene{animation:passslide .5s ease}
 .rev.flash{animation:flashred .6s}
-.rev h2{margin:8px 0}.rev .who{color:var(--muted);margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px}
+.rev h2{margin:8px 0}.rev .who{color:var(--muted);margin-bottom:12px}
 .revit{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
-.revit div{width:64px;height:64px;border-radius:12px;color:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:27px;animation:pop .35s backwards}
+.revit div{width:60px;height:60px;border-radius:12px;color:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:25px;animation:pop .35s backwards}
 .revit div small{font-size:10px;font-weight:700}
 .revit div:nth-child(2){animation-delay:.1s}.revit div:nth-child(3){animation-delay:.2s}
 .money{font-weight:700;font-size:16px}
@@ -127,6 +155,7 @@ td:first-child,th:first-child{text-align:left}
 @keyframes pop{from{transform:scale(0)}to{transform:scale(1)}}
 @keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-10deg)}75%{transform:rotate(10deg)}}
 @keyframes bustpop{0%{transform:scale(0) rotate(-12deg)}60%{transform:scale(1.12) rotate(4deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes passslide{0%{transform:translateX(-40px);opacity:0}100%{transform:translateX(0);opacity:1}}
 @keyframes flashred{0%,100%{background:var(--panel)}30%{background:#3a0e12}}
 @media(min-width:560px){.decide{grid-template-columns:1fr 1fr}}
 </style>
@@ -150,6 +179,7 @@ td:first-child,th:first-child{text-align:left}
   </div>
 </div>
 
+<div class="announce" id="announce"><div class="inner" id="announce-in"></div></div>
 <div class="ov" id="ov"><div class="rev" id="rev"></div></div>
 
 <script>
@@ -163,7 +193,9 @@ const AVATARS=[
   {name:"Raton",url:"https://d8j0ntlcm91z4.cloudfront.net/user_3Eml0cfSymsndD4KSR0xojHbKbR/hf_20260621_115301_cc67fd7a-c682-4bac-ba8a-931da2ae4f84.png"},
 ];
 const COVER="https://d8j0ntlcm91z4.cloudfront.net/user_3Eml0cfSymsndD4KSR0xojHbKbR/hf_20260621_113033_02713a52-b17c-447a-9be7-2a7b0b9093b1.png";
-const CAUGHT="__CAUGHT_URL__";
+const CAUGHT="https://d8j0ntlcm91z4.cloudfront.net/user_3Eml0cfSymsndD4KSR0xojHbKbR/hf_20260621_120235_0cb0a9bc-ae1d-479d-b461-bd85f392d584.png";
+const PASSIMG="https://d8j0ntlcm91z4.cloudfront.net/user_3Eml0cfSymsndD4KSR0xojHbKbR/hf_20260621_122211_ca73ff3c-f1f7-430a-93d3-1ecfea7deb26.png";
+const BOARD="https://d8j0ntlcm91z4.cloudfront.net/user_3Eml0cfSymsndD4KSR0xojHbKbR/hf_20260621_122146_33571176-64f9-441a-a4ff-2107fb229913.png";
 
 const ITEMS={
   pasta:{nm:"Pâtes",em:"🍝",legal:true,value:2,penalty:1,col:"#e9d8a6"},
@@ -179,6 +211,7 @@ const LEGAL=Object.keys(ITEMS).filter(k=>ITEMS[k].legal);
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>n>=0?'+'+n:''+n;
+const isUrl=u=>typeof u==='string'&&u.indexOf('http')===0;
 const avImg=(idx,cls)=>`<img class="av ${cls||''}" src="${AVATARS[(idx||0)%AVATARS.length].url}" alt="" onerror="this.style.visibility='hidden'">`;
 
 /* ============ SONS ============ */
@@ -196,6 +229,8 @@ const Snd=(()=>{let c=null;const e=()=>{if(!c)c=new(window.AudioContext||window.
     stamp(){t(140,.07,'square',.22);noise(.08,.12,.01)},
     cash(){t(660,.08,'triangle',.14);t(880,.08,'triangle',.14,.06);t(1180,.12,'triangle',.14,.12)},
     whoosh(){noise(.25,.08)},
+    gong(){t(180,.6,'sine',.2);t(270,.6,'sine',.12,.02)},
+    tick(){t(1200,.03,'square',.05)},
     siren(){const x=e(),o=x.createOscillator(),g=x.createGain();o.type='sawtooth';o.connect(g);g.connect(x.destination);const n=x.currentTime;
       g.gain.setValueAtTime(.16,n);o.frequency.setValueAtTime(660,n);o.frequency.linearRampToValueAtTime(440,n+.22);o.frequency.linearRampToValueAtTime(680,n+.44);o.frequency.linearRampToValueAtTime(440,n+.66);g.gain.exponentialRampToValueAtTime(.0001,n+.8);o.start(n);o.stop(n+.82)},
     win(){[523,659,784,1046].forEach((f,i)=>t(f,.18,'triangle',.16,i*.1))},
@@ -209,18 +244,19 @@ if(!room){room=Math.random().toString(36).slice(2,7).toUpperCase();params.set('r
 let playerId=sessionStorage.getItem('sd-id');
 if(!playerId){playerId='p-'+Math.random().toString(36).slice(2,10);sessionStorage.setItem('sd-id',playerId);}
 let myName=localStorage.getItem('sd-name')||'';
+let myAvatar=parseInt(localStorage.getItem('sd-av')||'0',10)||0;
 
 let VIEW=null, prep=null, lastPrepRound=-1, lastRevKey=null, flashMsg='';
+let announcedRound=-1, timerRound=-1, prepDeadline=0, autoLockedRound=-1, forcedRound=-1, lastHello=0;
 
 /* ============ websocket ============ */
-const base=location.pathname.replace(/\/+$/,'');
-const wsUrl=(location.protocol==='https:'?'wss://':'ws://')+location.host+base+'/ws/'+room;
+function buildWs(){const base=location.pathname.replace(/\/+$/,'');return (location.protocol==='https:'?'wss://':'ws://')+location.host+base+'/ws/'+room;}
 let ws,queue=[];
 function send(o){const s=JSON.stringify(o);if(ws&&ws.readyState===1)ws.send(s);else queue.push(s);}
 function sendAction(a){send({type:'action',action:a});}
 function connect(){
-  ws=new WebSocket(wsUrl);
-  ws.onopen=()=>{ws.send(JSON.stringify({type:'join',playerId}));if(myName)ws.send(JSON.stringify({type:'action',action:{type:'hello',name:myName}}));
+  ws=new WebSocket(buildWs());
+  ws.onopen=()=>{ws.send(JSON.stringify({type:'join',playerId}));if(myName){ws.send(JSON.stringify({type:'action',action:{type:'hello',name:myName}}));ws.send(JSON.stringify({type:'action',action:{type:'avatar',avatar:myAvatar}}));}
     queue.forEach(m=>ws.send(m));queue=[];};
   ws.onclose=()=>{setTimeout(connect,1500);};
   ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='error'){flash(m.error);return;}if(m.type!=='state')return;VIEW=m.view;render();};
@@ -229,28 +265,68 @@ function flash(t){flashMsg=t;const el=$('#errline');if(el)el.textContent=t;setTi
 
 /* modal pseudo */
 function ask(){if(myName){$('#namemodal').classList.remove('show');return;}$('#namemodal').classList.add('show');$('#nameinput').value=myName;$('#nameinput').focus();}
-$('#namego').onclick=()=>{const n=$('#nameinput').value.trim();if(!n)return;myName=n;localStorage.setItem('sd-name',n);$('#namemodal').classList.remove('show');Snd.pick();sendAction({type:'hello',name:n});};
+$('#namego').onclick=()=>{const n=$('#nameinput').value.trim();if(!n)return;myName=n;localStorage.setItem('sd-name',n);$('#namemodal').classList.remove('show');Snd.pick();sendAction({type:'hello',name:n});sendAction({type:'avatar',avatar:myAvatar});};
 $('#nameinput').addEventListener('keydown',e=>{if(e.key==='Enter')$('#namego').click();});
 
 /* ============ rendu ============ */
 function render(){
   if(!VIEW){$('#root').innerHTML='<div class="card"><p class="muted">Connexion…</p></div>';return;}
-  handleReveal();
   if(!myName)ask();
+  // ré-inscription auto si on n'est pas dans la partie en cours (ex. après une revanche)
+  if(VIEW.phase==='lobby'&&!VIEW.inRoster&&myName&&Date.now()-lastHello>1500){lastHello=Date.now();sendAction({type:'hello',name:myName});sendAction({type:'avatar',avatar:myAvatar});}
+  // annonce du douanier (5s) à chaque nouvelle manche
+  if(VIEW.phase!=='lobby'&&VIEW.phase!=='ended'&&VIEW.officerId&&VIEW.round!==announcedRound){announcedRound=VIEW.round;showAnnounce();}
+  // timer de préparation (60s)
+  if(VIEW.phase==='prepare'){if(VIEW.round!==timerRound){timerRound=VIEW.round;prepDeadline=Date.now()+60000;autoLockedRound=-1;forcedRound=-1;}}
+  else {prepDeadline=0;}
+  handleReveal();
   if(VIEW.phase==='lobby')renderLobby();else renderGame();
   renderChat();
 }
 const meRec=()=>VIEW.players.find(p=>p.id===VIEW.you);
 const pById=id=>VIEW.players.find(p=>p.id===id);
 
-function declString(decl){
-  const g={};decl.forEach(id=>g[id]=(g[id]||0)+1);
-  return Object.keys(g).map(id=>`${g[id]>1?g[id]+'× ':''}${ITEMS[id].em} ${ITEMS[id].nm}`).join(', ');
+function declString(decl){const g={};decl.forEach(id=>g[id]=(g[id]||0)+1);
+  return Object.keys(g).map(id=>`${g[id]>1?g[id]+'× ':''}${ITEMS[id].em} ${ITEMS[id].nm}`).join(', ');}
+
+/* ---- annonce douanier ---- */
+function showAnnounce(){
+  const off=VIEW.players.find(p=>p.isOfficer);if(!off)return;
+  Snd.gong();
+  $('#announce-in').innerHTML=`<div class="muted" style="font-size:15px">Manche ${VIEW.round}/${VIEW.totalRounds}</div>
+    ${avImg(off.avatar,'huge av')}<h2>👮 ${esc(off.name)}</h2><div class="sub">Douanier de la manche</div>
+    <div class="muted" style="margin-top:8px;font-size:13px">les autres préparent leur coffre</div>`;
+  const a=$('#announce');a.classList.add('show');
+  clearTimeout(showAnnounce._t);showAnnounce._t=setTimeout(()=>a.classList.remove('show'),5000);
+}
+
+/* ---- plateau ---- */
+function boardHtml(centerHtml){
+  const n=VIEW.players.length||1;
+  const ins=VIEW.inspect;
+  let nodes='';
+  VIEW.players.forEach((p,i)=>{
+    const ang=(-90+i*360/n)*Math.PI/180;
+    const x=50+39*Math.cos(ang), y=50+41*Math.sin(ang);
+    const cls=['seat']; let badge='';
+    if(p.isOfficer){cls.push('officer');badge='<span class="badge">👮</span>';}
+    if(VIEW.phase==='prepare'&&!p.isOfficer){ if(p.ready){cls.push('ready');badge='<span class="badge">✓</span>';} else cls.push('prepping'); }
+    if(VIEW.phase==='inspect'&&ins){ const q=ins.queue.find(z=>z.id===p.id);
+      if(q&&q.resolved){cls.push('done');badge='<span class="badge">'+(q.outcome==='busted'?'🚨':q.outcome==='clean'?'✅':'➡️')+'</span>';}
+      else if(p.id===ins.currentTargetId){cls.push('target');badge='<span class="badge">🔎</span>';}
+    }
+    nodes+=`<div class="${cls.join(' ')}" style="left:${x}%;top:${y}%">
+      <div style="position:relative;display:inline-block">${avImg(p.avatar,'')}${badge}</div>
+      <div class="seatname" style="${p.id===VIEW.you?'color:var(--gold)':''}">${esc(p.name)}</div>
+      <div class="seatcoins">${p.coins}💰</div></div>`;
+  });
+  const bg=isUrl(BOARD)?`style="background-image:url('${BOARD}')"`:'';
+  return `<div class="board" ${bg}><div class="bcenter">${centerHtml||''}</div>${nodes}</div>`;
 }
 
 function renderLobby(){
   $('#chatwrap').style.display='block';
-  const me=meRec();const myAv=me?me.avatar:0;
+  const me=meRec();const myAv=me?me.avatar:myAvatar;
   const isHost=VIEW.hostId===VIEW.you;
   const enough=VIEW.players.length>=VIEW.cfg.startMin;
   $('#root').innerHTML=`
@@ -272,26 +348,32 @@ function renderLobby(){
      <p class="error" id="errline"></p>
    </div>`;
   $('#copy').onclick=()=>{const i=$('#invlink');i.select();navigator.clipboard&&navigator.clipboard.writeText(location.href);const b=$('#copy');b.textContent='Copié ✓';setTimeout(()=>b.textContent='Copier',1500);};
-  document.querySelectorAll('.avpick').forEach(el=>el.onclick=()=>{Snd.pick();sendAction({type:'avatar',avatar:+el.dataset.i});});
+  document.querySelectorAll('.avpick').forEach(el=>el.onclick=()=>{myAvatar=+el.dataset.i;localStorage.setItem('sd-av',myAvatar);Snd.pick();sendAction({type:'avatar',avatar:myAvatar});});
   const sb=$('#startbtn');if(sb)sb.onclick=()=>{Snd.whoosh();sendAction({type:'start'});};
 }
 
 function renderGame(){
   $('#chatwrap').style.display='block';
   const me=meRec();
+  let cd='';
+  if(VIEW.phase==='prepare'&&prepDeadline){const left=Math.max(0,Math.ceil((prepDeadline-Date.now())/1000));cd=`<span class="cd ${left<=10?'urgent':''}" id="cd">⏱ ${left}s</span>`;}
   let body=`<div class="bar"><div>Manche <b style="color:var(--ink)">${VIEW.round}</b>/${VIEW.totalRounds}</div>
-    <div class="muted" style="font-size:14px">${VIEW.phase==='prepare'?'Préparation':VIEW.phase==='inspect'?'Inspection':VIEW.phase==='summary'?'Bilan':'Fin'}</div>
+    ${cd||`<div class="muted" style="font-size:14px">${VIEW.phase==='inspect'?'Contrôle':VIEW.phase==='summary'?'Bilan':VIEW.phase==='ended'?'Fin':''}</div>`}
     <div>💰 <b>${me?me.coins:'-'}</b></div></div>`;
-  body+=`<div class="score">${[...VIEW.players].sort((a,b)=>b.coins-a.coins).map(p=>`<span class="chip ${p.id===VIEW.you?'me':''}">
-     ${avImg(p.avatar,'')}${p.isOfficer?'👮':''}${esc(p.name)} <b>${p.coins}</b></span>`).join('')}</div>`;
   body+='<div id="phase"></div><p class="error" id="errline"></p>';
   $('#root').innerHTML=body;
   const ph=$('#phase');
-  if(VIEW.phase==='prepare')renderPrepare(ph);
+  if(!VIEW.inRoster){renderSpectator(ph);}
+  else if(VIEW.phase==='prepare')renderPrepare(ph);
   else if(VIEW.phase==='inspect')renderInspect(ph);
   else if(VIEW.phase==='summary')renderSummary(ph);
   else if(VIEW.phase==='ended')renderEnded(ph);
   if(flashMsg)$('#errline').textContent=flashMsg;
+}
+
+function renderSpectator(ph){
+  ph.innerHTML=`${boardHtml('Partie<br>en cours')}<div class="card" style="text-align:center">
+    <h2>👀 Tu observes</h2><p class="muted">La partie a déjà commencé — tu pourras jouer à la prochaine.</p></div>`;
 }
 
 /* préparation */
@@ -299,23 +381,22 @@ function resetPrep(){if(lastPrepRound!==VIEW.round||!prep){lastPrepRound=VIEW.ro
 function renderPrepare(ph){
   const officer=VIEW.players.find(p=>p.isOfficer);
   if(VIEW.you===VIEW.officerId){
-    const waiting=VIEW.players.filter(p=>!p.isOfficer);
-    ph.innerHTML=`<div class="card" style="text-align:center">${avImg(officer.avatar,'huge')}<h2 style="margin-top:8px">👮 Tu es le douanier</h2>
+    ph.innerHTML=`${boardHtml('👮 Tu es<br>le douanier')}
+      <div class="card" style="text-align:center"><h2>👮 Tu es le douanier</h2>
       <p class="muted">Les contrebandiers préparent leur coffre…</p>
-      <div class="score" style="margin-top:14px">${waiting.map(p=>`<span class="chip ${p.ready?'ready':''}">${avImg(p.avatar,'')}${esc(p.name)} ${p.ready?'✓':'…'}</span>`).join('')}</div>
-      <button class="btn btn-ghost btn-small" id="force" style="margin-top:14px">Forcer l'inspection</button></div>`;
+      <button class="btn btn-ghost btn-small" id="force" style="margin-top:12px">Forcer l'inspection</button></div>`;
     $('#force').onclick=()=>sendAction({type:'force_inspect'});
     return;
   }
-  if(!VIEW.me){ph.innerHTML='<div class="card"><p class="muted">…</p></div>';return;}
-  if(VIEW.me.ready){ph.innerHTML='<div class="card" style="text-align:center"><h2>Coffre verrouillé 🔒</h2><p class="muted">En attente des autres…</p></div>';return;}
+  if(!VIEW.me){ph.innerHTML=`${boardHtml()}<div class="card"><p class="muted">…</p></div>`;return;}
+  if(VIEW.me.ready){ph.innerHTML=`${boardHtml('Coffre<br>verrouillé 🔒')}<div class="card" style="text-align:center"><h2>Coffre verrouillé 🔒</h2><p class="muted">En attente des autres…</p></div>`;return;}
   resetPrep();
   const me=meRec();const hand=VIEW.me.hand;const maxB=Math.min(VIEW.cfg.maxBribe,Math.max(0,me?me.coins:0));
   ph.innerHTML=`<div class="card">
     <h2>Prépare ta cargaison</h2><p class="muted" style="font-size:14px;margin:4px 0">Coffre vers ${esc(officer?officer.name:'le douanier')} · ${VIEW.cfg.cargoMin} à ${VIEW.cfg.cargoMax} objets.</p>
-    <div class="lab">Ta main</div><div class="hand" id="hand"></div>
+    <div class="lab">Ta main (au moins une contrebande dedans 👀)</div><div class="hand" id="hand"></div>
     <div class="lab">Ton coffre (${prep.sel.length}/${VIEW.cfg.cargoMax})</div><div class="coffre" id="coffre"></div>
-    <div class="lab">Déclaration officielle — légal uniquement (${prep.decl.length}/${VIEW.cfg.cargoMax})</div>
+    <div class="lab">Déclaration — légal uniquement (${prep.decl.length}/${VIEW.cfg.cargoMax})</div>
     <div class="types" id="decladd"></div>
     <div class="declared" id="declared"></div>
     <button class="btn btn-ghost btn-small" id="dhonest" style="margin-top:8px">Déclarer comme mon coffre</button>
@@ -345,18 +426,30 @@ function renderPrepare(ph){
     Snd.chest();sendAction({type:'submit',items:prep.sel.map(i=>hand[i]),decl:prep.decl,bribe:prep.bribe});};
 }
 
+function clientAutoLock(){
+  if(!VIEW||!VIEW.me||VIEW.me.ready)return;
+  const hand=VIEW.me.hand;
+  let sel=(prep&&prep.sel.length)?prep.sel.slice(0,VIEW.cfg.cargoMax):[];
+  if(sel.length<VIEW.cfg.cargoMin)sel=[0];
+  const items=sel.map(i=>hand[i]).filter(x=>x!=null);
+  let decl=(prep&&prep.decl.length)?prep.decl.slice(0,VIEW.cfg.cargoMax):items.filter(id=>ITEMS[id].legal);
+  if(!decl.length)decl=[LEGAL[0]];
+  decl=decl.slice(0,VIEW.cfg.cargoMax);
+  Snd.chest();
+  sendAction({type:'submit',items,decl,bribe:(prep&&prep.bribe)||0});
+}
+
 /* inspection */
 function renderInspect(ph){
   const ins=VIEW.inspect;const tgt=ins.queue.find(q=>q.id===ins.currentTargetId);
   const isOff=VIEW.you===VIEW.officerId||VIEW.hostId===VIEW.you;
-  const q=ins.queue.map(x=>{let b=x.id===ins.currentTargetId?'🔎':'…';if(x.resolved)b=x.outcome==='busted'?'🚨':x.outcome==='clean'?'✅':'➡️';
-    return `<span class="chip ${x.id===ins.currentTargetId?'current':''} ${x.resolved?'resolved':''}">${avImg(x.avatar,'')}${esc(x.name)} ${b}</span>`;}).join('');
-  if(!tgt){ph.innerHTML='<div class="card"><p class="muted">Résolution…</p></div>';return;}
+  if(!tgt){ph.innerHTML=`${boardHtml('Contrôle…')}<div class="card"><p class="muted">Résolution…</p></div>`;return;}
   const ds=declString(tgt.decl);
+  const board=boardHtml('Contrôle de<br>'+esc(tgt.name));
   if(isOff){
-    ph.innerHTML=`<div class="queue">${q}</div>
-     <div class="card suspect" style="border-color:${tgt.color}">
-       ${avImg(tgt.avatar,'huge')}<h2 style="margin-top:8px">${esc(tgt.name)}</h2>
+    ph.innerHTML=`${board}
+     <div class="card" style="text-align:center;border-color:${tgt.color}">
+       ${avImg(tgt.avatar,'huge')}<h2 style="margin-top:6px">${esc(tgt.name)}</h2>
        <div class="declbox"><div class="dl">Déclare transporter</div><div class="dv">${ds}</div></div>
        <div class="bribebox ${tgt.bribe>0?'has':''}">${tgt.bribe>0?'💰 Pot-de-vin proposé : <b>'+tgt.bribe+'</b>':'Aucun pot-de-vin'}</div>
        <div class="decide"><button class="btn btn-pass btn-big" id="pass" style="margin:0">✅ Laisser passer<small>tu prends ${tgt.bribe} 💰</small></button>
@@ -365,7 +458,7 @@ function renderInspect(ph){
     $('#open').onclick=()=>{Snd.whoosh();sendAction({type:'decide',target:tgt.id,action:'open'});};
   }else{
     const off=VIEW.players.find(p=>p.isOfficer);
-    ph.innerHTML=`<div class="queue">${q}</div><div class="card" style="text-align:center">${avImg(off?off.avatar:0,'huge')}<h2 style="margin-top:8px">👮 ${esc(off?off.name:'Le douanier')} inspecte…</h2>
+    ph.innerHTML=`${board}<div class="card" style="text-align:center"><h2>👮 ${esc(off?off.name:'Le douanier')} inspecte…</h2>
       <p class="muted">Sous le feu : <b>${esc(tgt.name)}</b></p><p class="muted">Déclare : ${ds} · 💰 ${tgt.bribe}</p></div>`;
   }
 }
@@ -396,8 +489,8 @@ function renderEnded(ph){
       <tr><th>Joueur</th><th>📦</th><th>😏</th><th>🚨</th><th>🔍✓</th><th>💰</th></tr>
       ${f.ranking.map(r=>`<tr><td>${esc(r.name)}</td><td>${r.stats.smuggledThrough}</td><td>${r.stats.liesSuccessful}</td><td>${r.stats.bustedAsSmuggler}</td><td>${r.stats.correctSearches}</td><td>${r.stats.bribesAccepted}</td></tr>`).join('')}
     </table></div>
-    ${isHost?`<button class="btn btn-primary btn-big" id="rematch">🔁 Revanche (même groupe)</button>`:'<p class="muted">En attente de l’hôte…</p>'}</div>`;
-  const r=$('#rematch');if(r)r.onclick=()=>{renderEnded.done=false;Snd.whoosh();sendAction({type:'rematch'});};
+    ${isHost?`<button class="btn btn-primary btn-big" id="rematch">🔁 Revanche (mêmes joueurs présents)</button>`:'<p class="muted">En attente de l’hôte…</p>'}</div>`;
+  const r=$('#rematch');if(r)r.onclick=()=>{renderEnded.done=false;announcedRound=-1;Snd.whoosh();sendAction({type:'rematch'});};
 }
 
 /* révélation */
@@ -410,14 +503,15 @@ function showReveal(r){
   const ov=$('#ov'),card=$('#rev');
   const items=r.items.map(id=>`<div style="background:${ITEMS[id].col}">${ITEMS[id].em}<small>${ITEMS[id].nm}</small></div>`).join('');
   let title,cls,money,top;
-  if(r.action==='pass'){cls='pass';title='➡️ Laissé passer';money=`Contrebandier ${fmt(r.smugglerDelta)} · Douanier +${r.officerDelta} 💰`;top='<div class="chest">🧰</div>';Snd.stamp();setTimeout(()=>Snd.coin(),150);}
+  if(r.action==='pass'){cls='pass';title='➡️ Laissé passer';money=`Contrebandier ${fmt(r.smugglerDelta)} · Douanier +${r.officerDelta} 💰`;
+    top=isUrl(PASSIMG)?`<img class="scene" src="${PASSIMG}" alt="" onerror="this.outerHTML='<div class=chest>🧰</div>'">`:'<div class="chest">🧰</div>';Snd.stamp();setTimeout(()=>Snd.coin(),140);}
   else if(r.outcome==='busted'){cls='bust';title='🚨 PRIS LA MAIN DANS LE SAC !';money=`Contrebandier ${fmt(r.smugglerDelta)} · Douanier +${r.officerDelta} 💰`;
-    top=CAUGHT&&CAUGHT.indexOf('http')===0?`<img class="caughtimg" src="${CAUGHT}" alt="" onerror="this.outerHTML='<div class=chest>🚨</div>'">`:'<div class="chest">🚨</div>';Snd.siren();}
+    top=isUrl(CAUGHT)?`<img class="scene" src="${CAUGHT}" alt="" onerror="this.outerHTML='<div class=chest>🚨</div>'">`:'<div class="chest">🚨</div>';Snd.siren();}
   else{cls='clean';title='✅ Honnête — payé par le douanier';money=`Contrebandier +${r.smugglerDelta} · Douanier ${fmt(r.officerDelta)} 💰`;top='<div class="chest">🤝</div>';Snd.cash();}
   card.className='rev '+cls+(r.outcome==='busted'?' flash':'');
   card.innerHTML=`${top}<h2>${title}</h2><div class="who">${esc(r.smugglerName)}</div><div class="revit">${items}</div><div class="money">${money}</div>`;
   ov.classList.add('show');setTimeout(()=>card.classList.add('open'),60);
-  clearTimeout(showReveal._t);showReveal._t=setTimeout(()=>{ov.classList.remove('show');card.classList.remove('open');},r.outcome==='busted'?3000:2400);
+  clearTimeout(showReveal._t);showReveal._t=setTimeout(()=>{ov.classList.remove('show');card.classList.remove('open');},r.outcome==='busted'?3200:2400);
 }
 
 /* chat */
@@ -429,6 +523,19 @@ function renderChat(){const m=$('#cmsgs');if(!m)return;
 
 function itemCard(id,extra){const it=ITEMS[id];const c=document.createElement('div');c.className='item '+(it.legal?'legal':'illegal')+(extra?' '+extra:'');
   c.innerHTML=`<div class="em">${it.em}</div><div class="nm">${it.nm}</div><div class="vl">+${it.value}${it.legal?'':' ⚠'}</div>`;return c;}
+
+/* ticker global : compte à rebours + verrouillage auto */
+setInterval(()=>{
+  if(!VIEW||VIEW.phase!=='prepare'||!prepDeadline)return;
+  const raw=Math.ceil((prepDeadline-Date.now())/1000);
+  const left=Math.max(0,raw);
+  const cd=$('#cd');if(cd){cd.textContent='⏱ '+left+'s';cd.classList.toggle('urgent',left<=10);}
+  if(left<=10&&left>0)Snd.tick();
+  // chaque marchand verrouille tout seul à 0
+  if(raw<=0&&VIEW.inRoster&&VIEW.you!==VIEW.officerId&&VIEW.me&&!VIEW.me.ready&&autoLockedRound!==VIEW.round){autoLockedRound=VIEW.round;clientAutoLock();}
+  // 2s plus tard, le douanier/hôte force l'inspection (anti-blocage si un marchand est déconnecté)
+  if(raw<=-2&&(VIEW.you===VIEW.officerId||VIEW.hostId===VIEW.you)&&forcedRound!==VIEW.round){forcedRound=VIEW.round;sendAction({type:'force_inspect'});}
+},1000);
 
 ask();
 connect();

@@ -32,6 +32,7 @@ const ITEMS = {
   watches: { name: "Montres volées", legal: false, value: 5, penalty: 4 },
 };
 const LEGAL_IDS = Object.keys(ITEMS).filter((k) => ITEMS[k].legal);
+const ILLEGAL_IDS = Object.keys(ITEMS).filter((k) => !ITEMS[k].legal);
 const COLORS = ["#e63946", "#457b9d", "#2a9d8f", "#e9c46a", "#9d4edd", "#f4a261"];
 
 // ---- utilitaires purs ----
@@ -95,6 +96,8 @@ function addToRoster(s, id, name) {
     coins: CFG.startingCoins,
     stats: newStats(),
   });
+  // L'hôte est toujours un joueur présent (utile après une revanche qui réinitialise la liste).
+  if (!s.players.some((p) => p.id === s.hostId)) s.hostId = s.players[0].id;
 }
 
 // =============================================================
@@ -265,15 +268,24 @@ export function applyAction(state, playerId, action) {
   }
 
   if (t === "rematch") {
-    for (const p of s.players) { p.coins = CFG.startingCoins; p.stats = newStats(); }
-    s.phase = "lobby";
-    s.round = 0;
-    s.officerId = null;
+    // Nouvelle partie propre : on vide la liste et on n'y remet que l'hôte.
+    // Les autres joueurs ENCORE connectés se ré-inscrivent automatiquement (hello),
+    // les joueurs partis disparaissent — chaque partie a ses propres joueurs.
+    const host = findPlayer(s, playerId);
+    const keptName = host ? host.name : "Joueur";
+    const keptAvatar = host ? host.avatar : 0;
+    s.players = [];
+    s.hostId = playerId;
     s.subs = {};
     s.roundEvents = [];
     s.lastReveal = null;
     s.inspectOrder = [];
     s.inspectIndex = 0;
+    s.round = 0;
+    s.officerId = null;
+    s.phase = "lobby";
+    addToRoster(s, playerId, keptName);
+    if (s.players[0]) s.players[0].avatar = keptAvatar;
     return s;
   }
 
@@ -293,6 +305,10 @@ function nextRound(s) {
   for (const id of smugglerIds(s)) {
     const hand = [];
     for (let i = 0; i < CFG.handSize; i++) hand.push(drawItem());
+    // Garantie : il y a toujours AU MOINS une contrebande dans la main.
+    if (!hand.some((x) => !ITEMS[x].legal)) {
+      hand[randInt(hand.length)] = ILLEGAL_IDS[randInt(ILLEGAL_IDS.length)];
+    }
     s.subs[id] = { hand, items: [], decl: [], bribe: 0, ready: false };
   }
   s.phase = "prepare";
