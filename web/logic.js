@@ -45,6 +45,11 @@ function drawItem() {
   return pool[randInt(pool.length)];
 }
 function clone(s) { return JSON.parse(JSON.stringify(s)); }
+function multisetEqual(a, b) {
+  if (a.length !== b.length) return false;
+  const x = [...a].sort(), y = [...b].sort();
+  return x.every((v, i) => v === y[i]);
+}
 function newStats() {
   return {
     smuggledThrough: 0, liesSuccessful: 0, bustedAsSmuggler: 0,
@@ -81,10 +86,12 @@ export function setup(players) {
 function addToRoster(s, id, name) {
   if (s.players.some((p) => p.id === id)) return;
   if (s.players.length >= meta.maxPlayers) return;
+  const idx = s.players.length;
   s.players.push({
     id,
     name: name || "Joueur",
-    color: COLORS[s.players.length % COLORS.length],
+    color: COLORS[idx % COLORS.length],
+    avatar: idx % 6,
     coins: CFG.startingCoins,
     stats: newStats(),
   });
@@ -98,6 +105,7 @@ export function validateAction(state, playerId, action) {
   const t = action.type;
 
   if (t === "hello") return { ok: true };
+  if (t === "avatar") return { ok: true };
   if (t === "chat") return action.text ? { ok: true } : { ok: false, error: "Message vide" };
 
   const isHost = playerId === state.hostId;
@@ -125,8 +133,12 @@ export function validateAction(state, playerId, action) {
       if (i === -1) return { ok: false, error: "Objet indisponible" };
       hand.splice(i, 1);
     }
-    if (!ITEMS[action.declType] || !ITEMS[action.declType].legal)
-      return { ok: false, error: "Déclaration invalide" };
+    // Déclaration = liste de marchandises LÉGALES (1 à cargoMax, plusieurs types possibles).
+    const decl = Array.isArray(action.decl) ? action.decl : [];
+    if (decl.length < CFG.cargoMin || decl.length > CFG.cargoMax)
+      return { ok: false, error: `Déclare ${CFG.cargoMin} à ${CFG.cargoMax} marchandises` };
+    if (!decl.every((id) => ITEMS[id] && ITEMS[id].legal))
+      return { ok: false, error: "On ne déclare que du légal" };
     return { ok: true };
   }
 
@@ -176,6 +188,12 @@ export function applyAction(state, playerId, action) {
     return s;
   }
 
+  if (t === "avatar") {
+    const p = findPlayer(s, playerId);
+    if (p) p.avatar = Math.max(0, Math.min(5, parseInt(action.avatar, 10) || 0));
+    return s;
+  }
+
   if (t === "chat") {
     const p = findPlayer(s, playerId);
     s.chat.push({
@@ -204,8 +222,7 @@ export function applyAction(state, playerId, action) {
       if (i !== -1) { hand.splice(i, 1); chosen.push(it); }
     }
     sub.items = chosen;
-    sub.declType = action.declType;
-    sub.declQty = Math.max(CFG.cargoMin, Math.min(CFG.cargoMax, parseInt(action.declQty, 10) || chosen.length));
+    sub.decl = (Array.isArray(action.decl) ? action.decl : []).filter((id) => ITEMS[id] && ITEMS[id].legal).slice(0, CFG.cargoMax);
     let bribe = Math.max(0, Math.min(CFG.maxBribe, parseInt(action.bribe, 10) || 0));
     bribe = Math.min(bribe, Math.max(0, player.coins));
     sub.bribe = bribe;
@@ -221,8 +238,9 @@ export function applyAction(state, playerId, action) {
         const legal = sub.hand.filter((x) => ITEMS[x].legal);
         const pick = (legal.length ? legal : sub.hand).slice(0, CFG.cargoMin);
         sub.items = pick.length ? pick : [sub.hand[0]];
-        sub.declType = sub.items.find((x) => ITEMS[x].legal) || LEGAL_IDS[0];
-        sub.declQty = sub.items.length;
+        // Déclaration honnête par défaut : on déclare les objets légaux du coffre.
+        const legalItems = sub.items.filter((x) => ITEMS[x].legal);
+        sub.decl = legalItems.length ? legalItems : [LEGAL_IDS[0]];
         sub.bribe = 0;
         sub.ready = true;
       }
@@ -275,7 +293,7 @@ function nextRound(s) {
   for (const id of smugglerIds(s)) {
     const hand = [];
     for (let i = 0; i < CFG.handSize; i++) hand.push(drawItem());
-    s.subs[id] = { hand, items: [], declType: null, declQty: 1, bribe: 0, ready: false };
+    s.subs[id] = { hand, items: [], decl: [], bribe: 0, ready: false };
   }
   s.phase = "prepare";
 }
@@ -293,13 +311,13 @@ function resolve(s, smugglerId, action) {
   const sub = s.subs[smugglerId];
   const items = sub.items.map((id) => ITEMS[id]);
   const hasContraband = items.some((it) => !it.legal);
-  // Déclaration conforme : tous les objets sont du type déclaré ET la quantité correspond.
-  const matchesDeclaration = sub.items.length === sub.declQty && sub.items.every((id) => id === sub.declType);
+  // Déclaration conforme : le coffre correspond EXACTEMENT à la liste déclarée.
+  const matchesDeclaration = multisetEqual(sub.items, sub.decl);
   const isLie = hasContraband || !matchesDeclaration;
 
   const res = {
     smugglerId, smugglerName: smuggler.name, action,
-    items: sub.items, declType: sub.declType, declQty: sub.declQty, bribe: sub.bribe,
+    items: sub.items, decl: sub.decl, bribe: sub.bribe,
     isLie, hasContraband, outcome: null, smugglerDelta: 0, officerDelta: 0,
   };
 
@@ -329,11 +347,11 @@ function resolve(s, smugglerId, action) {
     smuggler.stats.winStreak = 0;
     officer.stats.correctSearches += 1;
   } else {
+    // Honnête : le douanier verse le prix de la marchandise au joueur honnête.
     const resale = items.reduce((a, it) => a + it.value, 0);
-    res.smugglerDelta = resale + CFG.indemnity;
-    res.officerDelta = -CFG.indemnity;
+    res.smugglerDelta = resale;
+    res.officerDelta = -resale;
     res.outcome = "clean";
-    res.indemnity = CFG.indemnity;
     res.resale = resale;
     smuggler.coins += res.smugglerDelta;
     officer.coins += res.officerDelta;
@@ -370,7 +388,7 @@ export function viewFor(state, playerId) {
       cargoMin: CFG.cargoMin, cargoMax: CFG.cargoMax, startingCoins: CFG.startingCoins,
     },
     players: state.players.map((p) => ({
-      id: p.id, name: p.name, color: p.color, coins: p.coins,
+      id: p.id, name: p.name, color: p.color, avatar: p.avatar || 0, coins: p.coins,
       isHost: p.id === state.hostId, isOfficer: p.id === state.officerId,
       ready: state.subs[p.id] ? state.subs[p.id].ready : false,
     })),
@@ -381,8 +399,8 @@ export function viewFor(state, playerId) {
   if (state.subs[playerId] && !isOfficer) {
     const sub = state.subs[playerId];
     v.me = {
-      hand: sub.hand, items: sub.items, declType: sub.declType,
-      declQty: sub.declQty, bribe: sub.bribe, ready: sub.ready,
+      hand: sub.hand, items: sub.items, decl: sub.decl,
+      bribe: sub.bribe, ready: sub.ready,
     };
   }
 
@@ -396,8 +414,8 @@ export function viewFor(state, playerId) {
         const done = state.roundEvents.find((e) => e.smugglerId === id);
         const pl = state.players.find((p) => p.id === id);
         return {
-          id, name: pl.name, color: pl.color,
-          declType: sub.declType, declQty: sub.declQty, bribe: sub.bribe,
+          id, name: pl.name, color: pl.color, avatar: pl.avatar || 0,
+          decl: sub.decl, bribe: sub.bribe,
           resolved: !!done, outcome: done ? done.outcome : null,
         };
       }),
