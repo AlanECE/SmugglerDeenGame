@@ -19,33 +19,46 @@ const CFG = {
   falseFine: 3,         // amende de base pour fausse déclaration sans contrebande
   legalWeight: 2,
   illegalWeight: 1,
-  pistolRoundChance: 0.18, // proba qu'UN pistolet apparaisse dans une manche (manche 2+)
+  pistolRoundChance: 0.28, // proba qu'UN pistolet apparaisse dans une manche (manche 2+)
   begThreshold: 3,      // mendicité possible si solde < 3
 };
 
+// Économie :
+//  - cost  = prix payé pour METTRE l'objet dans le coffre (au verrouillage).
+//  - value = ce que l'objet RAPPORTE s'il passe (revente / compensation).
+//  Légal  : cost 1-3, value = cost + 2 (profit de 2).
+//  Illégal: value = ancienne valeur +40%, cost ≈ moitié du prix,
+//           amende si saisi = penalty (= la valeur qu'il devait rapporter).
 const ITEMS = {
-  pasta: { name: "Pâtes", legal: true, value: 2, penalty: 1 },
-  eggs: { name: "Œufs", legal: true, value: 2, penalty: 1 },
-  coffee: { name: "Café", legal: true, value: 3, penalty: 1 },
-  cheese: { name: "Fromage", legal: true, value: 3, penalty: 2 },
-  weed: { name: "Weed", legal: false, value: 5, penalty: 4 },
-  cocaine: { name: "Cocaïne", legal: false, value: 7, penalty: 6 },
-  fakepapers: { name: "Faux papiers", legal: false, value: 6, penalty: 5 },
-  watches: { name: "Montres volées", legal: false, value: 5, penalty: 4 },
-  // Contrebande ultime : très rentable, très risquée. Jamais en manche 1, très rare.
-  pistol: { name: "Pistolet", legal: false, value: 30, penalty: 25, special: true },
+  pasta: { name: "Pâtes", legal: true, cost: 1, value: 3 },
+  eggs: { name: "Œufs", legal: true, cost: 1, value: 3 },
+  coffee: { name: "Café", legal: true, cost: 2, value: 4 },
+  cheese: { name: "Fromage", legal: true, cost: 3, value: 5 },
+  weed: { name: "Weed", legal: false, cost: 3, value: 7, penalty: 7 },
+  cocaine: { name: "Cocaïne", legal: false, cost: 5, value: 10, penalty: 10 },
+  fakepapers: { name: "Faux papiers", legal: false, cost: 4, value: 8, penalty: 8 },
+  watches: { name: "Montres volées", legal: false, cost: 3, value: 7, penalty: 7 },
+  // Contrebande ultime : éco spéciale (+30 / -25), exempte du coût d'achat.
+  pistol: { name: "Pistolet", legal: false, cost: 0, value: 30, penalty: 25, special: true },
 };
 const LEGAL_IDS = Object.keys(ITEMS).filter((k) => ITEMS[k].legal && !ITEMS[k].special);
-const ILLEGAL_IDS = Object.keys(ITEMS).filter((k) => !ITEMS[k].legal && !ITEMS[k].special);
-const NORMAL_IDS = Object.keys(ITEMS).filter((k) => !ITEMS[k].special);
+
+// Diversité croissante : le panel d'objets s'élargit au fil des manches.
+function poolForRound(round) {
+  const ids = ["pasta", "eggs", "weed"];          // manche 1 : 3 objets
+  if (round >= 2) ids.push("coffee", "cocaine");  // manche 2 : 5
+  if (round >= 3) ids.push("cheese", "watches");  // manche 3 : 7
+  if (round >= 4) ids.push("fakepapers");         // manche 4+ : 8
+  return ids;
+}
 const COLORS = ["#e63946", "#457b9d", "#2a9d8f", "#e9c46a", "#9d4edd", "#f4a261"];
 
 // ---- utilitaires purs ----
 function randInt(n) { return Math.floor(Math.random() * n); }
-function drawItem() {
+function drawItem(round) {
   // Le pistolet n'est JAMAIS tiré normalement (inséré à part, manche 2+).
   const pool = [];
-  for (const id of NORMAL_IDS) {
+  for (const id of poolForRound(round)) {
     const w = ITEMS[id].legal ? CFG.legalWeight : CFG.illegalWeight;
     for (let i = 0; i < w; i++) pool.push(id);
   }
@@ -265,6 +278,7 @@ export function applyAction(state, playerId, action) {
 
   if (t === "submit") {
     const sub = s.subs[playerId];
+    const player = findPlayer(s, playerId);
     const hand = [...sub.hand];
     const chosen = [];
     for (const it of action.items) {
@@ -273,9 +287,12 @@ export function applyAction(state, playerId, action) {
     }
     sub.items = chosen;
     sub.decl = (Array.isArray(action.decl) ? action.decl : []).filter((id) => ITEMS[id] && ITEMS[id].legal).slice(0, CFG.cargoMax);
-    // Soldes négatifs autorisés : le pot-de-vin n'est plus bridé par le solde
-    // (il n'est de toute façon prélevé qu'en cas de passage).
+    // Soldes négatifs autorisés : le pot-de-vin n'est plus bridé par le solde.
     sub.bribe = Math.max(0, Math.min(CFG.maxBribe, parseInt(action.bribe, 10) || 0));
+    // Coût d'achat payé immédiatement pour charger le coffre (négatif autorisé).
+    sub.cost = chosen.reduce((a, id) => a + (ITEMS[id].cost || 0), 0);
+    player.coins -= sub.cost;
+    player.stats.netGain -= sub.cost;
     sub.ready = true;
     if (smugglerIds(s).every((id) => s.subs[id] && s.subs[id].ready)) beginInspect(s);
     return s;
@@ -292,6 +309,9 @@ export function applyAction(state, playerId, action) {
         const legalItems = sub.items.filter((x) => ITEMS[x].legal);
         sub.decl = legalItems.length ? legalItems : [LEGAL_IDS[0]];
         sub.bribe = 0;
+        sub.cost = sub.items.reduce((a, id) => a + (ITEMS[id].cost || 0), 0);
+        const pl = findPlayer(s, id);
+        if (pl) { pl.coins -= sub.cost; pl.stats.netGain -= sub.cost; }
         sub.ready = true;
       }
     }
@@ -394,14 +414,15 @@ function nextRound(s) {
   if (s.round > s.totalRounds) { s.phase = "ended"; return; }
   const idx = (s.officerStartIndex + s.round - 1) % s.players.length;
   s.officerId = s.players[idx].id;
+  const illegalThisRound = poolForRound(s.round).filter((x) => !ITEMS[x].legal);
   for (const id of smugglerIds(s)) {
     const hand = [];
-    for (let i = 0; i < CFG.handSize; i++) hand.push(drawItem());
+    for (let i = 0; i < CFG.handSize; i++) hand.push(drawItem(s.round));
     // Garantie : il y a toujours AU MOINS une contrebande dans la main.
     if (!hand.some((x) => !ITEMS[x].legal)) {
-      hand[randInt(hand.length)] = ILLEGAL_IDS[randInt(ILLEGAL_IDS.length)];
+      hand[randInt(hand.length)] = illegalThisRound[randInt(illegalThisRound.length)];
     }
-    s.subs[id] = { hand, items: [], decl: [], bribe: 0, ready: false };
+    s.subs[id] = { hand, items: [], decl: [], bribe: 0, cost: 0, ready: false };
   }
   // Pistolet : JAMAIS en manche 1, au plus UN par manche, et rare.
   if (s.round > 1 && Math.random() < CFG.pistolRoundChance) {
@@ -434,7 +455,7 @@ function resolve(s, smugglerId, action) {
 
   const res = {
     smugglerId, smugglerName: smuggler.name, action,
-    items: sub.items, decl: sub.decl, bribe: sub.bribe,
+    items: sub.items, decl: sub.decl, bribe: sub.bribe, cost: sub.cost || 0,
     isLie, hasContraband, hasPistol: sub.items.includes("pistol"),
     outcome: null, smugglerDelta: 0, officerDelta: 0,
   };
@@ -525,7 +546,7 @@ export function viewFor(state, playerId) {
     const sub = state.subs[playerId];
     v.me = {
       hand: sub.hand, items: sub.items, decl: sub.decl,
-      bribe: sub.bribe, ready: sub.ready,
+      bribe: sub.bribe, cost: sub.cost || 0, ready: sub.ready,
     };
   }
 

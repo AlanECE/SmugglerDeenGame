@@ -150,7 +150,15 @@ td:first-child,th:first-child{text-align:left}
 .revit div{width:60px;height:60px;border-radius:12px;color:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:25px;animation:pop .35s backwards}
 .revit div small{font-size:10px;font-weight:700}
 .revit div:nth-child(2){animation-delay:.1s}.revit div:nth-child(3){animation-delay:.2s}
-.money{font-weight:700;font-size:16px}
+.money{font-weight:700;font-size:15px;line-height:1.5}
+.money small{font-weight:400;color:var(--muted)}
+.revavs{display:flex;align-items:center;justify-content:center;gap:16px;margin:4px 0 12px}
+.revav{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:700;max-width:110px}
+.revav .av{box-shadow:0 0 0 3px var(--gold),0 0 16px rgba(233,196,106,.5)}
+.rev.bust .revav.smug .av,.rev.pistol .revav.smug .av{box-shadow:0 0 0 3px var(--red),0 0 16px rgba(193,18,31,.6)}
+.rev.clean .revav.smug .av{box-shadow:0 0 0 3px var(--green)}
+.rev .vs{font-size:26px}
+.rev .rname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes pop{from{transform:scale(0)}to{transform:scale(1)}}
 @keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-10deg)}75%{transform:rotate(10deg)}}
@@ -239,15 +247,15 @@ const PASSIMG="https://d8j0ntlcm91z4.cloudfront.net/user_3Eml0cfSymsndD4KSR0xojH
 const BOARD="https://d8j0ntlcm91z4.cloudfront.net/user_3Eml0cfSymsndD4KSR0xojHbKbR/hf_20260621_122146_33571176-64f9-441a-a4ff-2107fb229913.png";
 
 const ITEMS={
-  pasta:{nm:"Pâtes",em:"🍝",legal:true,value:2,penalty:1,col:"#e9d8a6"},
-  eggs:{nm:"Œufs",em:"🥚",legal:true,value:2,penalty:1,col:"#f4f1de"},
-  coffee:{nm:"Café",em:"☕",legal:true,value:3,penalty:1,col:"#a98467"},
-  cheese:{nm:"Fromage",em:"🧀",legal:true,value:3,penalty:2,col:"#f2cc8f"},
-  weed:{nm:"Weed",em:"🌿",legal:false,value:5,penalty:4,col:"#588157"},
-  cocaine:{nm:"Cocaïne",em:"❄️",legal:false,value:7,penalty:6,col:"#dfe7ec"},
-  fakepapers:{nm:"Faux papiers",em:"📄",legal:false,value:6,penalty:5,col:"#cdb4db"},
-  watches:{nm:"Montres volées",em:"⌚",legal:false,value:5,penalty:4,col:"#bc6c25"},
-  pistol:{nm:"Pistolet",em:"🔫",legal:false,value:30,penalty:25,col:"#cdd2d6",special:true},
+  pasta:{nm:"Pâtes",em:"🍝",legal:true,cost:1,value:3,col:"#e9d8a6"},
+  eggs:{nm:"Œufs",em:"🥚",legal:true,cost:1,value:3,col:"#f4f1de"},
+  coffee:{nm:"Café",em:"☕",legal:true,cost:2,value:4,col:"#a98467"},
+  cheese:{nm:"Fromage",em:"🧀",legal:true,cost:3,value:5,col:"#f2cc8f"},
+  weed:{nm:"Weed",em:"🌿",legal:false,cost:3,value:7,penalty:7,col:"#588157"},
+  cocaine:{nm:"Cocaïne",em:"❄️",legal:false,cost:5,value:10,penalty:10,col:"#dfe7ec"},
+  fakepapers:{nm:"Faux papiers",em:"📄",legal:false,cost:4,value:8,penalty:8,col:"#cdb4db"},
+  watches:{nm:"Montres volées",em:"⌚",legal:false,cost:3,value:7,penalty:7,col:"#bc6c25"},
+  pistol:{nm:"Pistolet",em:"🔫",legal:false,cost:0,value:30,penalty:25,col:"#cdd2d6",special:true},
 };
 const INTRO_MS=4000, NEGO_MS=20000, SUMMARY_MS=5000, BEG_MS=60000;
 const LEGAL=Object.keys(ITEMS).filter(k=>ITEMS[k].legal);
@@ -292,7 +300,7 @@ let myAvatar=parseInt(localStorage.getItem('sd-av')||'0',10)||0;
 let VIEW=null, prep=null, lastPrepRound=-1, lastRevKey=null, flashMsg='';
 let announcedRound=-1, timerRound=-1, prepDeadline=0, autoLockedRound=-1, forcedRound=-1, lastHello=0;
 let ctrlKey=null, ctrlStart=0, ctrlPhase='wait', ctrlAutoKey=null, revealUntil=0;
-let sumRound=-1, sumDeadline=0, sumNextKey=null;
+let sumRound=-1, sumDeadline=0, sumNextKey=null, sumShown=false;
 let begSeen=null, begStartLocal=0, begEndKey=null;
 
 /* ============ websocket ============ */
@@ -331,9 +339,10 @@ function render(){
     const k=VIEW.round+':'+VIEW.inspect.index;
     if(k!==ctrlKey){ctrlKey=k;ctrlStart=Math.max(Date.now(),revealUntil);ctrlPhase=Date.now()<ctrlStart?'wait':'intro';ctrlAutoKey=null;}
   } else { ctrlKey=null; }
-  // résumé plein écran (5s) puis manche suivante auto
-  if(VIEW.phase==='summary'){ if(VIEW.round!==sumRound){sumRound=VIEW.round;sumDeadline=Date.now()+SUMMARY_MS;sumNextKey=null;showSumOverlay();} }
-  else { hide('#sumov'); sumRound=-1; }
+  // résumé plein écran : on montre D'ABORD le résultat de la dernière inspection,
+  // PUIS (après l'animation) le résumé 5s, PUIS la manche suivante.
+  if(VIEW.phase==='summary'){ if(VIEW.round!==sumRound){sumRound=VIEW.round;sumShown=false;sumNextKey=null;sumDeadline=Math.max(Date.now(),revealUntil)+SUMMARY_MS;} }
+  else { hide('#sumov'); sumRound=-1; sumShown=false; }
   // mendicité (overlay temps réel)
   updateBegging();
   if(VIEW.phase==='lobby')renderLobby();else renderGame();
@@ -445,8 +454,7 @@ function renderPrepare(ph){
     ph.innerHTML=`${boardHtml('👮 Tu es<br>le douanier')}
       <div class="card" style="text-align:center"><h2>👮 Tu es le douanier</h2>
       <p class="muted">Les contrebandiers préparent leur coffre…</p>
-      <button class="btn btn-ghost btn-small" id="force" style="margin-top:12px">Forcer l'inspection</button></div>`;
-    $('#force').onclick=()=>sendAction({type:'force_inspect'});
+      <p class="muted" style="font-size:13px">Le contrôle démarre dès que tout le monde a verrouillé.</p></div>`;
     return;
   }
   if(!VIEW.me){ph.innerHTML=`${boardHtml()}<div class="card"><p class="muted">…</p></div>`;return;}
@@ -456,7 +464,7 @@ function renderPrepare(ph){
   ph.innerHTML=`<div class="card">
     <h2>Prépare ta cargaison</h2><p class="muted" style="font-size:14px;margin:4px 0">Coffre vers ${esc(officer?officer.name:'le douanier')} · ${VIEW.cfg.cargoMin} à ${VIEW.cfg.cargoMax} objets.</p>
     <div class="lab">Ta main (au moins une contrebande dedans 👀)</div><div class="hand" id="hand"></div>
-    <div class="lab">Ton coffre (${prep.sel.length}/${VIEW.cfg.cargoMax})</div><div class="coffre" id="coffre"></div>
+    <div class="lab">Ton coffre (${prep.sel.length}/${VIEW.cfg.cargoMax}) — coût d'achat : <b>${prep.sel.reduce((a,i)=>a+(ITEMS[hand[i]]?ITEMS[hand[i]].cost:0),0)}</b> 💰 (payé au verrouillage)</div><div class="coffre" id="coffre"></div>
     <div class="lab">Déclaration — légal uniquement (${prep.decl.length}/${VIEW.cfg.cargoMax})</div>
     <div class="types" id="decladd"></div>
     <div class="declared" id="declared"></div>
@@ -576,10 +584,10 @@ function renderSummary(ph){
     ${can?`<button class="btn btn-primary btn-big" id="next">${VIEW.round>=VIEW.totalRounds?'Voir le classement':'Manche suivante'}</button>`:'<p class="muted">En attente du douanier…</p>'}</div>`;
   const n=$('#next');if(n)n.onclick=()=>{Snd.whoosh();sendAction({type:'next'});};
 }
-function srow(e){const items=e.items.map(id=>ITEMS[id].em).join(' ');let l,c;
-  if(e.outcome==='passed'){c='pass';l=`passe — ${e.isLie?'a bluffé 😏':'honnête'} (+${e.smugglerDelta} / douanier +${e.officerDelta})`;}
-  else if(e.outcome==='busted'){c='bust';l=`PRIS 🚨 (${e.smugglerDelta} / douanier +${e.officerDelta})`;}
-  else{c='clean';l=`honnête ✅ payé par le douanier (+${e.smugglerDelta} / douanier ${e.officerDelta})`;}
+function srow(e){const items=e.items.map(id=>ITEMS[id].em).join(' ');const net=e.smugglerDelta-(e.cost||0);let l,c;
+  if(e.outcome==='passed'){c='pass';l=`${e.hasPistol?'🔫 ':''}passe — ${e.isLie?'bluff 😏':'honnête'} · marchand ${fmt(net)} / douanier +${e.officerDelta}`;}
+  else if(e.outcome==='busted'){c='bust';l=`${e.hasPistol?'🔫 ':''}PRIS 🚨 · marchand ${fmt(net)} / douanier +${e.officerDelta}`;}
+  else{c='clean';l=`honnête ✅ · marchand ${fmt(net)} / douanier ${fmt(e.officerDelta)}`;}
   return `<div class="srow ${c}"><b>${esc(e.smugglerName)}</b> <span class="it">${items}</span> <span>${l}</span></div>`;}
 
 /* fin */
@@ -607,21 +615,29 @@ function handleReveal(){
 function showReveal(r){
   const ov=$('#ov'),card=$('#rev');
   const items=r.items.map(id=>`<div style="background:${ITEMS[id].col}">${ITEMS[id].em}<small>${ITEMS[id].nm}</small></div>`).join('');
-  let title,cls,money,top;
-  if(r.action==='pass'){cls='pass';title='➡️ Laissé passer';money=`Contrebandier ${fmt(r.smugglerDelta)} · Douanier +${r.officerDelta} 💰`;
+  let title,cls,top;
+  if(r.action==='pass'){cls='pass';title='➡️ Laissé passer';
     top=isUrl(PASSIMG)?`<img class="scene" src="${PASSIMG}" alt="" onerror="this.outerHTML='<div class=chest>🧰</div>'">`:'<div class="chest">🧰</div>';Snd.stamp();setTimeout(()=>Snd.coin(),140);}
-  else if(r.outcome==='busted'){cls='bust';title='🚨 PRIS LA MAIN DANS LE SAC !';money=`Contrebandier ${fmt(r.smugglerDelta)} · Douanier +${r.officerDelta} 💰`;
+  else if(r.outcome==='busted'){cls='bust';title='🚨 PRIS LA MAIN DANS LE SAC !';
     top=isUrl(CAUGHT)?`<img class="scene" src="${CAUGHT}" alt="" onerror="this.outerHTML='<div class=chest>🚨</div>'">`:'<div class="chest">🚨</div>';Snd.siren();}
-  else{cls='clean';title='✅ Honnête — payé par le douanier';money=`Contrebandier +${r.smugglerDelta} · Douanier ${fmt(r.officerDelta)} 💰`;top='<div class="chest">🤝</div>';Snd.cash();}
-  // PISTOLET : moment dramatique
+  else{cls='clean';title='✅ Honnête — payé par le douanier';top='<div class="chest">🤝</div>';Snd.cash();}
   if(r.hasPistol){
-    cls='pistol '+cls;
-    top='<div class="pistolbig">🔫</div>';
+    cls='pistol '+cls;top='<div class="pistolbig">🔫</div>';
     title=r.outcome==='busted'?'🔫 PISTOLET SAISI !':'🔫 LE PISTOLET PASSE !';
     Snd.siren();setTimeout(()=>r.outcome==='busted'?Snd.lose():Snd.win(),300);
   }
+  // avatars (style plateau) : marchand vs douanier
+  const sa=pById(r.smugglerId), oa=VIEW.players.find(p=>p.isOfficer);
+  const vs=r.action==='pass'?'➜':'🔍';
+  const avs=`<div class="revavs">
+    <div class="revav smug">${avImg(sa?sa.avatar:0,'huge')}<div class="rname">${esc(r.smugglerName)}</div></div>
+    <div class="vs">${vs}</div>
+    <div class="revav off">${avImg(oa?oa.avatar:0,'huge')}<div class="rname">👮 ${esc(oa?oa.name:'Douanier')}</div></div></div>`;
+  const net=r.smugglerDelta-(r.cost||0);
+  const money=`<div>Marchand <b>${fmt(net)}</b> 💰 <small>(coût −${r.cost||0} · contrôle ${fmt(r.smugglerDelta)})</small></div>
+    <div>Douanier <b>${fmt(r.officerDelta)}</b> 💰</div>`;
   card.className='rev '+cls+(r.outcome==='busted'||r.hasPistol?' flash':'');
-  card.innerHTML=`${top}<h2>${title}</h2><div class="who">${esc(r.smugglerName)}</div><div class="revit">${items}</div><div class="money">${money}</div>`;
+  card.innerHTML=`${top}<h2>${title}</h2>${avs}<div class="revit">${items}</div><div class="money">${money}</div>`;
   ov.classList.add('show');setTimeout(()=>card.classList.add('open'),60);
   const dur=r.hasPistol?3900:(r.outcome==='busted'?3200:2400);
   revealUntil=Date.now()+dur;
@@ -636,7 +652,7 @@ function renderChat(){const m=$('#cmsgs');if(!m)return;
   m.scrollTop=m.scrollHeight;}
 
 function itemCard(id,extra){const it=ITEMS[id];const c=document.createElement('div');c.className='item '+(it.legal?'legal':'illegal')+(it.special?' pistol':'')+(extra?' '+extra:'');
-  c.innerHTML=`<div class="em">${it.em}</div><div class="nm">${it.nm}</div><div class="vl">+${it.value}${it.legal?'':' ⚠'}</div>`;return c;}
+  c.innerHTML=`<div class="em">${it.em}</div><div class="nm">${it.nm}</div><div class="vl">−${it.cost}→+${it.value}</div>`;return c;}
 
 /* ---- résumé plein écran ---- */
 function showSumOverlay(){
@@ -730,11 +746,10 @@ setInterval(()=>{
     return;
   }
 
-  // --- résumé : plein écran 5s puis manche suivante auto ---
+  // --- résumé : on attend la fin de l'animation du dernier résultat, puis 5s, puis suite ---
   if(VIEW.phase==='summary'){
-    const left=Math.max(0,Math.ceil((sumDeadline-now)/1000));
-    const sEl=$('#sumov-in');// (le texte statique suffit)
-    if(now>=sumDeadline&&iAmDriver&&sumNextKey!==sumRound){sumNextKey=sumRound;hide('#sumov');sendAction({type:'next'});}
+    if(!sumShown&&now>=revealUntil){sumShown=true;sumDeadline=now+SUMMARY_MS;showSumOverlay();}
+    if(sumShown&&now>=sumDeadline&&iAmDriver&&sumNextKey!==sumRound){sumNextKey=sumRound;hide('#sumov');sendAction({type:'next'});}
     return;
   }
 },1000);
