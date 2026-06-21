@@ -19,6 +19,8 @@ const CFG = {
   falseFine: 3,         // amende de base pour fausse déclaration sans contrebande
   legalWeight: 2,
   illegalWeight: 1,
+  pistolRoundChance: 0.18, // proba qu'UN pistolet apparaisse dans une manche (manche 2+)
+  begThreshold: 3,      // mendicité possible si solde < 3
 };
 
 const ITEMS = {
@@ -30,16 +32,20 @@ const ITEMS = {
   cocaine: { name: "Cocaïne", legal: false, value: 7, penalty: 6 },
   fakepapers: { name: "Faux papiers", legal: false, value: 6, penalty: 5 },
   watches: { name: "Montres volées", legal: false, value: 5, penalty: 4 },
+  // Contrebande ultime : très rentable, très risquée. Jamais en manche 1, très rare.
+  pistol: { name: "Pistolet", legal: false, value: 30, penalty: 25, special: true },
 };
-const LEGAL_IDS = Object.keys(ITEMS).filter((k) => ITEMS[k].legal);
-const ILLEGAL_IDS = Object.keys(ITEMS).filter((k) => !ITEMS[k].legal);
+const LEGAL_IDS = Object.keys(ITEMS).filter((k) => ITEMS[k].legal && !ITEMS[k].special);
+const ILLEGAL_IDS = Object.keys(ITEMS).filter((k) => !ITEMS[k].legal && !ITEMS[k].special);
+const NORMAL_IDS = Object.keys(ITEMS).filter((k) => !ITEMS[k].special);
 const COLORS = ["#e63946", "#457b9d", "#2a9d8f", "#e9c46a", "#9d4edd", "#f4a261"];
 
 // ---- utilitaires purs ----
 function randInt(n) { return Math.floor(Math.random() * n); }
 function drawItem() {
+  // Le pistolet n'est JAMAIS tiré normalement (inséré à part, manche 2+).
   const pool = [];
-  for (const id of Object.keys(ITEMS)) {
+  for (const id of NORMAL_IDS) {
     const w = ITEMS[id].legal ? CFG.legalWeight : CFG.illegalWeight;
     for (let i = 0; i < w; i++) pool.push(id);
   }
@@ -79,6 +85,9 @@ export function setup(players) {
     roundEvents: [],
     lastReveal: null,
     chat: [],
+    begged: [],      // ids ayant déjà mendié cette partie (1 fois max)
+    begging: null,   // session de mendicité en cours { id, byName, total, donations:[] }
+    debts: {},       // dette morale : beneficiaryId -> { donorId: total donné }
   };
   for (const id of players) addToRoster(s, id, null);
   return s;
@@ -161,9 +170,48 @@ export function validateAction(state, playerId, action) {
     return { ok: true };
   }
 
+  if (t === "raise_bribe") {
+    if (state.phase !== "inspect") return { ok: false, error: "Mauvaise phase" };
+    const target = state.inspectOrder[state.inspectIndex];
+    if (playerId !== target) return { ok: false, error: "Seul le marchand contrôlé peut surenchérir" };
+    const amt = parseInt(action.amount, 10);
+    if (!(amt > 0)) return { ok: false, error: "Montant invalide" };
+    const sub = state.subs[playerId];
+    if (sub && sub.bribe >= CFG.maxBribe) return { ok: false, error: `Pot-de-vin déjà au max (${CFG.maxBribe})` };
+    return { ok: true };
+  }
+
   if (t === "next") {
     if (state.phase !== "summary") return { ok: false, error: "Mauvaise phase" };
     if (!isOfficer && !isHost) return { ok: false, error: "Réservé au douanier ou à l'hôte" };
+    return { ok: true };
+  }
+
+  if (t === "beg_start") {
+    if (state.phase !== "prepare" && state.phase !== "summary")
+      return { ok: false, error: "Mendicité possible avant ou entre les manches" };
+    if (state.round < 2) return { ok: false, error: "Pas de mendicité en première manche" };
+    const p = findPlayer(state, playerId);
+    if (!p) return { ok: false, error: "Joueur inconnu" };
+    if (p.coins >= CFG.begThreshold) return { ok: false, error: `Mendicité réservée aux fauchés (< ${CFG.begThreshold} pièces)` };
+    if ((state.begged || []).includes(playerId)) return { ok: false, error: "Tu as déjà mendié cette partie" };
+    if (state.begging) return { ok: false, error: "Une mendicité est déjà en cours" };
+    return { ok: true };
+  }
+
+  if (t === "beg_give") {
+    if (!state.begging) return { ok: false, error: "Aucune mendicité en cours" };
+    if (playerId === state.begging.id) return { ok: false, error: "Tu ne peux pas te donner à toi-même" };
+    if (!findPlayer(state, playerId)) return { ok: false, error: "Joueur inconnu" };
+    const amt = parseInt(action.amount, 10);
+    if (!(amt > 0)) return { ok: false, error: "Montant invalide (positif requis)" };
+    return { ok: true };
+  }
+
+  if (t === "beg_end") {
+    if (!state.begging) return { ok: false, error: "Aucune mendicité en cours" };
+    if (playerId !== state.begging.id && playerId !== state.hostId)
+      return { ok: false, error: "Réservé au mendiant ou à l'hôte" };
     return { ok: true };
   }
 
@@ -217,7 +265,6 @@ export function applyAction(state, playerId, action) {
 
   if (t === "submit") {
     const sub = s.subs[playerId];
-    const player = findPlayer(s, playerId);
     const hand = [...sub.hand];
     const chosen = [];
     for (const it of action.items) {
@@ -226,9 +273,9 @@ export function applyAction(state, playerId, action) {
     }
     sub.items = chosen;
     sub.decl = (Array.isArray(action.decl) ? action.decl : []).filter((id) => ITEMS[id] && ITEMS[id].legal).slice(0, CFG.cargoMax);
-    let bribe = Math.max(0, Math.min(CFG.maxBribe, parseInt(action.bribe, 10) || 0));
-    bribe = Math.min(bribe, Math.max(0, player.coins));
-    sub.bribe = bribe;
+    // Soldes négatifs autorisés : le pot-de-vin n'est plus bridé par le solde
+    // (il n'est de toute façon prélevé qu'en cas de passage).
+    sub.bribe = Math.max(0, Math.min(CFG.maxBribe, parseInt(action.bribe, 10) || 0));
     sub.ready = true;
     if (smugglerIds(s).every((id) => s.subs[id] && s.subs[id].ready)) beginInspect(s);
     return s;
@@ -262,6 +309,47 @@ export function applyAction(state, playerId, action) {
     return s;
   }
 
+  if (t === "raise_bribe") {
+    const targetId = s.inspectOrder[s.inspectIndex];
+    const sub = s.subs[targetId];
+    if (sub && targetId === playerId) {
+      sub.bribe = Math.min(CFG.maxBribe, sub.bribe + parseInt(action.amount, 10));
+    }
+    return s;
+  }
+
+  if (t === "beg_start") {
+    const p = findPlayer(s, playerId);
+    s.begging = { id: playerId, byName: p ? p.name : "Joueur", total: 0, donations: [] };
+    s.begged = [...(s.begged || []), playerId];
+    return s;
+  }
+
+  if (t === "beg_give") {
+    if (s.begging) {
+      const amt = Math.min(999, parseInt(action.amount, 10));
+      const donor = findPlayer(s, playerId);
+      const ben = findPlayer(s, s.begging.id);
+      if (donor && ben && amt > 0) {
+        // Soldes négatifs autorisés : le don passe même si le donneur tombe en négatif.
+        donor.coins -= amt;
+        ben.coins += amt;
+        s.begging.total += amt;
+        s.begging.donations.push({ from: playerId, fromName: donor.name, amount: amt });
+        if (s.begging.donations.length > 60) s.begging.donations.shift();
+        // Dette morale mémorisée : bénéficiaire -> donneur -> total
+        s.debts[ben.id] = s.debts[ben.id] || {};
+        s.debts[ben.id][playerId] = (s.debts[ben.id][playerId] || 0) + amt;
+      }
+    }
+    return s;
+  }
+
+  if (t === "beg_end") {
+    s.begging = null;
+    return s;
+  }
+
   if (t === "next") {
     nextRound(s);
     return s;
@@ -284,6 +372,9 @@ export function applyAction(state, playerId, action) {
     s.round = 0;
     s.officerId = null;
     s.phase = "lobby";
+    s.begged = [];
+    s.begging = null;
+    s.debts = {};
     addToRoster(s, playerId, keptName);
     if (s.players[0]) s.players[0].avatar = keptAvatar;
     return s;
@@ -299,6 +390,7 @@ function nextRound(s) {
   s.lastReveal = null;
   s.inspectOrder = [];
   s.inspectIndex = 0;
+  s.begging = null; // une mendicité ne traverse pas les manches
   if (s.round > s.totalRounds) { s.phase = "ended"; return; }
   const idx = (s.officerStartIndex + s.round - 1) % s.players.length;
   s.officerId = s.players[idx].id;
@@ -310,6 +402,15 @@ function nextRound(s) {
       hand[randInt(hand.length)] = ILLEGAL_IDS[randInt(ILLEGAL_IDS.length)];
     }
     s.subs[id] = { hand, items: [], decl: [], bribe: 0, ready: false };
+  }
+  // Pistolet : JAMAIS en manche 1, au plus UN par manche, et rare.
+  if (s.round > 1 && Math.random() < CFG.pistolRoundChance) {
+    const sids = smugglerIds(s);
+    if (sids.length) {
+      const lucky = sids[randInt(sids.length)];
+      const h = s.subs[lucky].hand;
+      h[randInt(h.length)] = "pistol";
+    }
   }
   s.phase = "prepare";
 }
@@ -334,7 +435,8 @@ function resolve(s, smugglerId, action) {
   const res = {
     smugglerId, smugglerName: smuggler.name, action,
     items: sub.items, decl: sub.decl, bribe: sub.bribe,
-    isLie, hasContraband, outcome: null, smugglerDelta: 0, officerDelta: 0,
+    isLie, hasContraband, hasPistol: sub.items.includes("pistol"),
+    outcome: null, smugglerDelta: 0, officerDelta: 0,
   };
 
   if (action === "pass") {
@@ -391,6 +493,7 @@ export function isGameOver() { return { over: false }; }
 // =============================================================
 export function viewFor(state, playerId) {
   const isOfficer = playerId === state.officerId;
+  const me = state.players.find((p) => p.id === playerId);
   const v = {
     phase: state.phase,
     round: state.round,
@@ -398,10 +501,11 @@ export function viewFor(state, playerId) {
     hostId: state.hostId,
     officerId: state.officerId,
     you: playerId,
-    inRoster: state.players.some((p) => p.id === playerId),
+    inRoster: !!me,
     cfg: {
       startMin: CFG.startMin, maxPlayers: meta.maxPlayers, maxBribe: CFG.maxBribe,
       cargoMin: CFG.cargoMin, cargoMax: CFG.cargoMax, startingCoins: CFG.startingCoins,
+      begThreshold: CFG.begThreshold,
     },
     players: state.players.map((p) => ({
       id: p.id, name: p.name, color: p.color, avatar: p.avatar || 0, coins: p.coins,
@@ -409,6 +513,11 @@ export function viewFor(state, playerId) {
       ready: state.subs[p.id] ? state.subs[p.id].ready : false,
     })),
     chat: state.chat,
+    begging: state.begging || null,
+    canBeg: (state.phase === "prepare" || state.phase === "summary") && state.round >= 2 &&
+            !!me && me.coins < CFG.begThreshold && !(state.begged || []).includes(playerId) && !state.begging,
+    // dette morale : ce que JE dois à chacun (mes bienfaiteurs)
+    myCreditors: state.debts[playerId] || {},
   };
 
   // Données privées du joueur (sa propre main)
@@ -429,9 +538,11 @@ export function viewFor(state, playerId) {
         const sub = state.subs[id];
         const done = state.roundEvents.find((e) => e.smugglerId === id);
         const pl = state.players.find((p) => p.id === id);
+        // Dette morale : combien CE marchand a donné au douanier actuel (s'il a mendié avant).
+        const benefactor = (state.debts[state.officerId] && state.debts[state.officerId][id]) || 0;
         return {
           id, name: pl.name, color: pl.color, avatar: pl.avatar || 0,
-          decl: sub.decl, bribe: sub.bribe,
+          decl: sub.decl, bribe: sub.bribe, benefactor,
           resolved: !!done, outcome: done ? done.outcome : null,
         };
       }),

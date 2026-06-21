@@ -157,6 +157,45 @@ td:first-child,th:first-child{text-align:left}
 @keyframes bustpop{0%{transform:scale(0) rotate(-12deg)}60%{transform:scale(1.12) rotate(4deg)}100%{transform:scale(1) rotate(0)}}
 @keyframes passslide{0%{transform:translateX(-40px);opacity:0}100%{transform:translateX(0);opacity:1}}
 @keyframes flashred{0%,100%{background:var(--panel)}30%{background:#3a0e12}}
+
+/* pistolet */
+.item.pistol{border:2px solid #ff3b3b;background:linear-gradient(160deg,#2a2f36,#15181d);box-shadow:0 0 14px rgba(255,59,59,.4);position:relative}
+.item.pistol .nm{color:#ff8a8a}
+.item.pistol::after{content:"ULTIME";position:absolute;top:3px;right:3px;font-size:8px;font-weight:800;color:#fff;background:#ff3b3b;padding:1px 4px;border-radius:4px}
+.rev.pistol{border-color:#ff3b3b;box-shadow:0 0 70px rgba(255,59,59,.7)}
+.rev.pistol h2{color:#ff6b6b}
+.rev .pistolbig{font-size:64px;animation:gunshake .5s}
+@keyframes gunshake{0%,100%{transform:translateX(0) rotate(0)}20%{transform:translateX(-8px) rotate(-8deg)}60%{transform:translateX(8px) rotate(8deg)}}
+
+/* badge bienfaiteur */
+.benef{display:inline-block;background:#2a9d8f;color:#fff;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700;margin-top:6px}
+.btn-debt{background:linear-gradient(180deg,#2a9d8f,#1f7a6f);border:none;color:#fff;margin-top:10px}
+
+/* contrôle : intro */
+.introcard{text-align:center}
+.introcard .big{font-size:30px;font-weight:800;margin:8px 0}
+.cdbig{font-size:40px;font-weight:800;color:var(--gold)}
+.raise{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0}
+.raise .btn{padding:10px 14px}
+
+/* mendicité */
+.begov{position:fixed;inset:0;background:rgba(10,4,4,.94);display:none;flex-direction:column;align-items:center;z-index:58;padding:18px;overflow-y:auto;backdrop-filter:blur(3px)}
+.begov.show{display:flex;animation:fade .2s}
+.begcard{width:min(460px,96vw);text-align:center}
+.begtimer{font-size:30px;font-weight:800;color:#ff8a8a}
+.begtotal{font-size:22px;font-weight:800;color:var(--gold);margin:6px 0}
+.begbtns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0}
+.begbtns .btn{min-width:60px}
+.beglist{max-height:160px;overflow-y:auto;text-align:left;margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.begline{padding:4px 0;font-size:14px}
+.quickmsg{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+.quickmsg .btn{padding:7px 10px;font-size:13px}
+.begbtn{background:linear-gradient(180deg,#ff7b54,#d6452a);border:none;color:#fff}
+
+/* résumé / setup plein écran */
+.fsov{position:fixed;inset:0;background:rgba(5,8,12,.94);display:none;place-items:center;z-index:56;padding:16px;overflow-y:auto;backdrop-filter:blur(3px)}
+.fsov.show{display:grid;animation:fade .2s}
+.fscard{width:min(540px,96vw);text-align:center;animation:apop .4s}
 @media(min-width:560px){.decide{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -180,6 +219,8 @@ td:first-child,th:first-child{text-align:left}
 </div>
 
 <div class="announce" id="announce"><div class="inner" id="announce-in"></div></div>
+<div class="fsov" id="sumov"><div class="fscard card" id="sumov-in"></div></div>
+<div class="begov" id="begov"><div class="begcard card" id="begov-in"></div></div>
 <div class="ov" id="ov"><div class="rev" id="rev"></div></div>
 
 <script>
@@ -206,7 +247,9 @@ const ITEMS={
   cocaine:{nm:"Cocaïne",em:"❄️",legal:false,value:7,penalty:6,col:"#dfe7ec"},
   fakepapers:{nm:"Faux papiers",em:"📄",legal:false,value:6,penalty:5,col:"#cdb4db"},
   watches:{nm:"Montres volées",em:"⌚",legal:false,value:5,penalty:4,col:"#bc6c25"},
+  pistol:{nm:"Pistolet",em:"🔫",legal:false,value:30,penalty:25,col:"#cdd2d6",special:true},
 };
+const INTRO_MS=4000, NEGO_MS=20000, SUMMARY_MS=5000, BEG_MS=60000;
 const LEGAL=Object.keys(ITEMS).filter(k=>ITEMS[k].legal);
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -248,6 +291,9 @@ let myAvatar=parseInt(localStorage.getItem('sd-av')||'0',10)||0;
 
 let VIEW=null, prep=null, lastPrepRound=-1, lastRevKey=null, flashMsg='';
 let announcedRound=-1, timerRound=-1, prepDeadline=0, autoLockedRound=-1, forcedRound=-1, lastHello=0;
+let ctrlKey=null, ctrlStart=0, ctrlPhase='wait', ctrlAutoKey=null, revealUntil=0;
+let sumRound=-1, sumDeadline=0, sumNextKey=null;
+let begSeen=null, begStartLocal=0, begEndKey=null;
 
 /* ============ websocket ============ */
 function buildWs(){const base=location.pathname.replace(/\/+$/,'');return (location.protocol==='https:'?'wss://':'ws://')+location.host+base+'/ws/'+room;}
@@ -280,9 +326,20 @@ function render(){
   if(VIEW.phase==='prepare'){if(VIEW.round!==timerRound){timerRound=VIEW.round;prepDeadline=Date.now()+60000;autoLockedRound=-1;forcedRound=-1;}}
   else {prepDeadline=0;}
   handleReveal();
+  // chronologie du contrôle (intro 4s -> négo 20s) par cible
+  if(VIEW.phase==='inspect'&&VIEW.inspect){
+    const k=VIEW.round+':'+VIEW.inspect.index;
+    if(k!==ctrlKey){ctrlKey=k;ctrlStart=Math.max(Date.now(),revealUntil);ctrlPhase=Date.now()<ctrlStart?'wait':'intro';ctrlAutoKey=null;}
+  } else { ctrlKey=null; }
+  // résumé plein écran (5s) puis manche suivante auto
+  if(VIEW.phase==='summary'){ if(VIEW.round!==sumRound){sumRound=VIEW.round;sumDeadline=Date.now()+SUMMARY_MS;sumNextKey=null;showSumOverlay();} }
+  else { hide('#sumov'); sumRound=-1; }
+  // mendicité (overlay temps réel)
+  updateBegging();
   if(VIEW.phase==='lobby')renderLobby();else renderGame();
   renderChat();
 }
+function hide(sel){const e=$(sel);if(e)e.classList.remove('show');}
 const meRec=()=>VIEW.players.find(p=>p.id===VIEW.you);
 const pById=id=>VIEW.players.find(p=>p.id===id);
 
@@ -294,8 +351,10 @@ function showAnnounce(){
   const off=VIEW.players.find(p=>p.isOfficer);if(!off)return;
   Snd.gong();
   $('#announce-in').innerHTML=`<div class="muted" style="font-size:15px">Manche ${VIEW.round}/${VIEW.totalRounds}</div>
-    ${avImg(off.avatar,'huge av')}<h2>👮 ${esc(off.name)}</h2><div class="sub">Douanier de la manche</div>
-    <div class="muted" style="margin-top:8px;font-size:13px">les autres préparent leur coffre</div>`;
+    <h2 style="margin:6px 0">Nouveau contrôle</h2>
+    ${boardHtml('👮<br>'+esc(off.name))}
+    <div class="sub">👮 ${esc(off.name)} est le douanier</div>
+    <div class="muted" style="margin-top:6px;font-size:13px">les autres préparent leur coffre…</div>`;
   const a=$('#announce');a.classList.add('show');
   clearTimeout(showAnnounce._t);showAnnounce._t=setTimeout(()=>a.classList.remove('show'),5000);
 }
@@ -360,8 +419,10 @@ function renderGame(){
   let body=`<div class="bar"><div>Manche <b style="color:var(--ink)">${VIEW.round}</b>/${VIEW.totalRounds}</div>
     ${cd||`<div class="muted" style="font-size:14px">${VIEW.phase==='inspect'?'Contrôle':VIEW.phase==='summary'?'Bilan':VIEW.phase==='ended'?'Fin':''}</div>`}
     <div>💰 <b>${me?me.coins:'-'}</b></div></div>`;
+  if(VIEW.canBeg)body+=`<div class="card" style="text-align:center;border-color:#ff7b54;padding:12px"><b>Presque ruiné…</b> <button class="btn begbtn-main" style="margin-left:6px">🆘 Mendier</button></div>`;
   body+='<div id="phase"></div><p class="error" id="errline"></p>';
   $('#root').innerHTML=body;
+  const bb=$('.begbtn-main');if(bb)bb.onclick=()=>{Snd.gong();sendAction({type:'beg_start'});};
   const ph=$('#phase');
   if(!VIEW.inRoster){renderSpectator(ph);}
   else if(VIEW.phase==='prepare')renderPrepare(ph);
@@ -439,27 +500,71 @@ function clientAutoLock(){
   sendAction({type:'submit',items,decl,bribe:(prep&&prep.bribe)||0});
 }
 
-/* inspection */
+/* inspection — scène de contrôle : intro 4s -> négociation 20s */
 function renderInspect(ph){
   const ins=VIEW.inspect;const tgt=ins.queue.find(q=>q.id===ins.currentTargetId);
-  const isOff=VIEW.you===VIEW.officerId||VIEW.hostId===VIEW.you;
-  if(!tgt){ph.innerHTML=`${boardHtml('Contrôle…')}<div class="card"><p class="muted">Résolution…</p></div>`;return;}
+  const isOff=VIEW.you===VIEW.officerId; // seul le VRAI douanier voit les boutons de décision
+  const isTarget=VIEW.you===ins.currentTargetId;
+  if(!tgt){ph.innerHTML=`${boardHtml('Contrôle…')}`;return;}
   const ds=declString(tgt.decl);
-  const board=boardHtml('Contrôle de<br>'+esc(tgt.name));
+  const now=Date.now();
+  const introEnd=ctrlStart+INTRO_MS, negoEnd=introEnd+NEGO_MS;
+
+  if(ctrlPhase==='wait'){ph.innerHTML=boardHtml('Résultat…');return;}
+
+  if(ctrlPhase==='intro'){
+    const left=Math.max(0,Math.ceil((introEnd-now)/1000));
+    ph.innerHTML=`${boardHtml('Contrôle '+(ins.index+1)+'/'+ins.total)}
+      <div class="card introcard" style="border-color:${tgt.color}">
+        ${avImg(tgt.avatar,'huge')}<h2 style="margin-top:6px">${esc(tgt.name)} passe la douane</h2>
+        <div class="declbox"><div class="dl">Déclare transporter</div><div class="dv">${ds}</div></div>
+        <div class="bribebox ${tgt.bribe>0?'has':''}">${tgt.bribe>0?'💰 Pot-de-vin : <b>'+tgt.bribe+'</b>':'Aucun pot-de-vin'}</div>
+        ${tgt.benefactor>0?`<div class="benef">🤝 Bienfaiteur — t'a donné ${tgt.benefactor} 💰</div>`:''}
+        <div class="muted" style="margin-top:10px">Négociation dans</div><div class="cdbig">${left}</div></div>`;
+    return;
+  }
+
+  // négociation
+  const left=Math.max(0,Math.ceil((negoEnd-now)/1000));
+  const maxB=VIEW.cfg.maxBribe;
+  let panel;
   if(isOff){
-    ph.innerHTML=`${board}
-     <div class="card" style="text-align:center;border-color:${tgt.color}">
-       ${avImg(tgt.avatar,'huge')}<h2 style="margin-top:6px">${esc(tgt.name)}</h2>
-       <div class="declbox"><div class="dl">Déclare transporter</div><div class="dv">${ds}</div></div>
-       <div class="bribebox ${tgt.bribe>0?'has':''}">${tgt.bribe>0?'💰 Pot-de-vin proposé : <b>'+tgt.bribe+'</b>':'Aucun pot-de-vin'}</div>
-       <div class="decide"><button class="btn btn-pass btn-big" id="pass" style="margin:0">✅ Laisser passer<small>tu prends ${tgt.bribe} 💰</small></button>
-         <button class="btn btn-open btn-big" id="open" style="margin:0">🔓 Ouvrir le coffre<small>honnête = tu paies le prix</small></button></div></div>`;
-    $('#pass').onclick=()=>{Snd.stamp();sendAction({type:'decide',target:tgt.id,action:'pass'});};
-    $('#open').onclick=()=>{Snd.whoosh();sendAction({type:'decide',target:tgt.id,action:'open'});};
+    panel=`<div class="declbox"><div class="dl">Déclare transporter</div><div class="dv">${ds}</div></div>
+      <div class="bribebox ${tgt.bribe>0?'has':''}">${tgt.bribe>0?'💰 Pot-de-vin proposé : <b>'+tgt.bribe+'</b>':'Aucun pot-de-vin'}</div>
+      ${tgt.benefactor>0?`<div class="benef">🤝 Bienfaiteur — t'a donné ${tgt.benefactor} 💰 quand tu mendiais</div>`:''}
+      <div class="decide"><button class="btn btn-pass btn-big" id="pass" style="margin:0">✅ Laisser passer<small>tu prends ${tgt.bribe} 💰</small></button>
+        <button class="btn btn-open btn-big" id="open" style="margin:0">🔓 Ouvrir le coffre<small>honnête = tu paies le prix</small></button></div>
+      ${tgt.benefactor>0?`<button class="btn btn-debt btn-big" id="debtpass" style="margin-top:10px">🤝 Laisser passer par dette</button>`:''}`;
+  }else if(isTarget){
+    panel=`<div class="declbox"><div class="dl">Tu déclares</div><div class="dv">${ds}</div></div>
+      <div class="bribebox ${tgt.bribe>0?'has':''}">Ton pot-de-vin : <b>${tgt.bribe}</b> / ${maxB} 💰</div>
+      <div class="muted">Surenchéris pour le convaincre 👇</div>
+      <div class="raise">
+        <button class="btn" data-amt="1" ${tgt.bribe>=maxB?'disabled':''}>+1</button>
+        <button class="btn" data-amt="3" ${tgt.bribe>=maxB?'disabled':''}>+3</button>
+        <button class="btn" data-amt="5" ${tgt.bribe>=maxB?'disabled':''}>+5</button></div>`;
   }else{
     const off=VIEW.players.find(p=>p.isOfficer);
-    ph.innerHTML=`${board}<div class="card" style="text-align:center"><h2>👮 ${esc(off?off.name:'Le douanier')} inspecte…</h2>
-      <p class="muted">Sous le feu : <b>${esc(tgt.name)}</b></p><p class="muted">Déclare : ${ds} · 💰 ${tgt.bribe}</p></div>`;
+    panel=`<p class="muted">👮 ${esc(off?off.name:'Le douanier')} décide…</p>
+      <div class="declbox"><div class="dl">Déclare</div><div class="dv">${ds}</div></div>
+      <div class="bribebox ${tgt.bribe>0?'has':''}">💰 Pot-de-vin : <b>${tgt.bribe}</b></div>`;
+    // Filet de sécurité : si le douanier est absent, l'hôte peut débloquer.
+    if(VIEW.you===VIEW.hostId&&VIEW.you!==ins.currentTargetId)
+      panel+=`<button class="btn btn-ghost btn-small" id="hostskip" style="margin-top:12px">⏭️ Débloquer (hôte) — laisser passer</button>`;
+  }
+  ph.innerHTML=`${boardHtml('⏱ '+left+'s')}
+    <div class="card" style="text-align:center;border-color:${tgt.color}">
+      ${avImg(tgt.avatar,'huge')}<h2 style="margin:6px 0">${esc(tgt.name)}</h2>
+      <div class="cd ${left<=5?'urgent':''}" style="font-size:18px">⏱ ${left}s de négociation</div>
+      ${panel}</div>`;
+  if(isOff){
+    $('#pass').onclick=()=>{Snd.stamp();sendAction({type:'decide',target:tgt.id,action:'pass'});};
+    $('#open').onclick=()=>{Snd.whoosh();sendAction({type:'decide',target:tgt.id,action:'open'});};
+    const db=$('#debtpass');if(db)db.onclick=()=>{Snd.cash();sendAction({type:'decide',target:tgt.id,action:'pass'});};
+  } else if(isTarget){
+    document.querySelectorAll('.raise .btn').forEach(b=>b.onclick=()=>{Snd.coin();sendAction({type:'raise_bribe',amount:+b.dataset.amt});});
+  } else {
+    const hs=$('#hostskip');if(hs)hs.onclick=()=>{Snd.stamp();sendAction({type:'decide',target:tgt.id,action:'pass'});};
   }
 }
 
@@ -508,10 +613,19 @@ function showReveal(r){
   else if(r.outcome==='busted'){cls='bust';title='🚨 PRIS LA MAIN DANS LE SAC !';money=`Contrebandier ${fmt(r.smugglerDelta)} · Douanier +${r.officerDelta} 💰`;
     top=isUrl(CAUGHT)?`<img class="scene" src="${CAUGHT}" alt="" onerror="this.outerHTML='<div class=chest>🚨</div>'">`:'<div class="chest">🚨</div>';Snd.siren();}
   else{cls='clean';title='✅ Honnête — payé par le douanier';money=`Contrebandier +${r.smugglerDelta} · Douanier ${fmt(r.officerDelta)} 💰`;top='<div class="chest">🤝</div>';Snd.cash();}
-  card.className='rev '+cls+(r.outcome==='busted'?' flash':'');
+  // PISTOLET : moment dramatique
+  if(r.hasPistol){
+    cls='pistol '+cls;
+    top='<div class="pistolbig">🔫</div>';
+    title=r.outcome==='busted'?'🔫 PISTOLET SAISI !':'🔫 LE PISTOLET PASSE !';
+    Snd.siren();setTimeout(()=>r.outcome==='busted'?Snd.lose():Snd.win(),300);
+  }
+  card.className='rev '+cls+(r.outcome==='busted'||r.hasPistol?' flash':'');
   card.innerHTML=`${top}<h2>${title}</h2><div class="who">${esc(r.smugglerName)}</div><div class="revit">${items}</div><div class="money">${money}</div>`;
   ov.classList.add('show');setTimeout(()=>card.classList.add('open'),60);
-  clearTimeout(showReveal._t);showReveal._t=setTimeout(()=>{ov.classList.remove('show');card.classList.remove('open');},r.outcome==='busted'?3200:2400);
+  const dur=r.hasPistol?3900:(r.outcome==='busted'?3200:2400);
+  revealUntil=Date.now()+dur;
+  clearTimeout(showReveal._t);showReveal._t=setTimeout(()=>{ov.classList.remove('show');card.classList.remove('open');},dur);
 }
 
 /* chat */
@@ -521,20 +635,108 @@ function renderChat(){const m=$('#cmsgs');if(!m)return;
   m.innerHTML=(VIEW.chat||[]).map(x=>`<div class="cmsg"><b style="color:${x.color}">${esc(x.name)}:</b> ${esc(x.text)}</div>`).join('');
   m.scrollTop=m.scrollHeight;}
 
-function itemCard(id,extra){const it=ITEMS[id];const c=document.createElement('div');c.className='item '+(it.legal?'legal':'illegal')+(extra?' '+extra:'');
+function itemCard(id,extra){const it=ITEMS[id];const c=document.createElement('div');c.className='item '+(it.legal?'legal':'illegal')+(it.special?' pistol':'')+(extra?' '+extra:'');
   c.innerHTML=`<div class="em">${it.em}</div><div class="nm">${it.nm}</div><div class="vl">+${it.value}${it.legal?'':' ⚠'}</div>`;return c;}
 
-/* ticker global : compte à rebours + verrouillage auto */
+/* ---- résumé plein écran ---- */
+function showSumOverlay(){
+  const ev=(VIEW.summary&&VIEW.summary.events)||[];
+  $('#sumov-in').innerHTML=`<h2>Bilan de la manche ${VIEW.round}</h2>
+    <div style="margin:14px 0">${ev.map(srow).join('')||'<p class="muted">—</p>'}</div>
+    <div class="muted">Manche suivante dans un instant…</div>`;
+  $('#sumov').classList.add('show');
+}
+
+/* ---- mendicité (overlay temps réel) ---- */
+let begRenderKey=null;
+function updateBegging(){
+  const ov=$('#begov');
+  if(!VIEW.begging){ov.classList.remove('show');begSeen=null;begRenderKey=null;return;}
+  const b=VIEW.begging;
+  if(begSeen!==b.id){begSeen=b.id;begStartLocal=Date.now();}
+  const key=b.id+':'+(b.donations?b.donations.length:0);
+  if(begRenderKey===key&&ov.classList.contains('show')){
+    const tEl=$('#begtimer');if(tEl){const left=Math.max(0,Math.ceil((begStartLocal+BEG_MS-Date.now())/1000));tEl.textContent='🆘 '+left+'s';}
+    return; // évite de réécrire l'input pendant la frappe
+  }
+  begRenderKey=key;
+  const left=Math.max(0,Math.ceil((begStartLocal+BEG_MS-Date.now())/1000));
+  const amIBeg=VIEW.you===b.id;
+  const beggar=pById(b.id);
+  const dons=(b.donations||[]).slice().reverse().map(d=>`<div class="begline">🪙 <b>${esc(d.fromName)}</b> donne ${d.amount} 💰</div>`).join('')||'<div class="muted">Personne n\'a encore donné…</div>';
+  let give='';
+  if(!amIBeg&&VIEW.inRoster){
+    give=`<div class="muted">Tu peux l'aider… ou refuser 😈</div>
+      <div class="begbtns">${[1,3,5,10].map(a=>`<button class="btn begbtn" data-g="${a}">+${a}</button>`).join('')}</div>
+      <div style="display:flex;gap:8px;margin-top:6px"><input id="giveamt" type="number" min="1" placeholder="montant libre" style="flex:1"><button class="btn" id="givec">Donner</button></div>`;
+  }else if(amIBeg){
+    give=`<div class="muted" style="margin-top:8px">Tu es en détresse 🥺 Merci à ceux qui t'aident — tu t'en souviendras…</div><button class="btn btn-ghost btn-small" id="begend" style="margin-top:10px">Terminer</button>`;
+  }
+  $('#begov-in').innerHTML=`
+    <div class="begtimer" id="begtimer">🆘 ${left}s</div>
+    <h2 style="margin:8px 0">${avImg(beggar?beggar.avatar:0,'big')} ${esc(b.byName)} est fauché·e !</h2>
+    <div class="begtotal">Reçu : ${b.total} 💰</div>
+    ${give}
+    <div class="quickmsg">${['Allez quoi 🥺','Jamais 😈','Pleure 💀','❤️'].map(m=>`<button class="btn" data-msg="${esc(m)}">${m}</button>`).join('')}</div>
+    <div class="beglist">${dons}</div>`;
+  ov.classList.add('show');
+  if(!amIBeg&&VIEW.inRoster){
+    document.querySelectorAll('.begbtn').forEach(x=>x.onclick=()=>{Snd.coin();sendAction({type:'beg_give',amount:+x.dataset.g});});
+    const gc=$('#givec');if(gc)gc.onclick=()=>{const v=parseInt($('#giveamt').value,10);if(v>0){Snd.coin();sendAction({type:'beg_give',amount:v});$('#giveamt').value='';}};
+  }
+  const be=$('#begend');if(be)be.onclick=()=>sendAction({type:'beg_end'});
+  document.querySelectorAll('.quickmsg .btn').forEach(x=>x.onclick=()=>sendAction({type:'chat',text:x.dataset.msg}));
+}
+
+/* ticker global */
 setInterval(()=>{
-  if(!VIEW||VIEW.phase!=='prepare'||!prepDeadline)return;
-  const raw=Math.ceil((prepDeadline-Date.now())/1000);
-  const left=Math.max(0,raw);
-  const cd=$('#cd');if(cd){cd.textContent='⏱ '+left+'s';cd.classList.toggle('urgent',left<=10);}
-  if(left<=10&&left>0)Snd.tick();
-  // chaque marchand verrouille tout seul à 0
-  if(raw<=0&&VIEW.inRoster&&VIEW.you!==VIEW.officerId&&VIEW.me&&!VIEW.me.ready&&autoLockedRound!==VIEW.round){autoLockedRound=VIEW.round;clientAutoLock();}
-  // 2s plus tard, le douanier/hôte force l'inspection (anti-blocage si un marchand est déconnecté)
-  if(raw<=-2&&(VIEW.you===VIEW.officerId||VIEW.hostId===VIEW.you)&&forcedRound!==VIEW.round){forcedRound=VIEW.round;sendAction({type:'force_inspect'});}
+  if(!VIEW)return;
+  const now=Date.now();
+  const iAmDriver=(VIEW.you===VIEW.officerId||VIEW.hostId===VIEW.you);
+
+  // --- mendicité : compte à rebours + fin auto ---
+  if(VIEW.begging){
+    const tEl=$('#begtimer');if(tEl&&begSeen===VIEW.begging.id){const l=Math.max(0,Math.ceil((begStartLocal+BEG_MS-now)/1000));tEl.textContent='🆘 '+l+'s';}
+    if(begSeen===VIEW.begging.id){
+      const el=now-begStartLocal;
+      if(el>=BEG_MS&&(VIEW.you===VIEW.begging.id||VIEW.hostId===VIEW.you)&&begEndKey!==VIEW.begging.id){begEndKey=VIEW.begging.id;sendAction({type:'beg_end'});}
+      else if(el>=BEG_MS+3000&&begEndKey!==VIEW.begging.id){begEndKey=VIEW.begging.id;sendAction({type:'beg_end'});} // sécurité si mendiant/hôte partis
+    }
+    // gèle les autres timers pendant la mendicité
+    if(prepDeadline)prepDeadline+=1000;
+    if(VIEW.phase==='summary')sumDeadline=now+SUMMARY_MS;
+    return;
+  }
+
+  // --- préparation : 60s + verrouillage auto + anti-blocage ---
+  if(VIEW.phase==='prepare'&&prepDeadline){
+    const raw=Math.ceil((prepDeadline-now)/1000);
+    const left=Math.max(0,raw);
+    const cd=$('#cd');if(cd){cd.textContent='⏱ '+left+'s';cd.classList.toggle('urgent',left<=10);}
+    if(left<=10&&left>0)Snd.tick();
+    if(raw<=0&&VIEW.inRoster&&VIEW.you!==VIEW.officerId&&VIEW.me&&!VIEW.me.ready&&autoLockedRound!==VIEW.round){autoLockedRound=VIEW.round;clientAutoLock();}
+    if(raw<=-2&&iAmDriver&&forcedRound!==VIEW.round){forcedRound=VIEW.round;sendAction({type:'force_inspect'});}
+    return;
+  }
+
+  // --- contrôle : intro 4s -> négo 20s -> laisser passer auto ---
+  if(VIEW.phase==='inspect'&&VIEW.inspect){
+    const introEnd=ctrlStart+INTRO_MS, negoEnd=introEnd+NEGO_MS;
+    const desired=now<ctrlStart?'wait':now<introEnd?'intro':'nego';
+    ctrlPhase=desired;
+    const ph=$('#phase');if(ph&&now>=ctrlStart)renderInspect(ph);
+    // auto "laisser passer" à la fin des 20s — piloté par le VRAI douanier uniquement
+    if(now>=negoEnd&&VIEW.you===VIEW.officerId&&ctrlAutoKey!==ctrlKey&&VIEW.inspect.currentTargetId){ctrlAutoKey=ctrlKey;sendAction({type:'decide',target:VIEW.inspect.currentTargetId,action:'pass'});}
+    return;
+  }
+
+  // --- résumé : plein écran 5s puis manche suivante auto ---
+  if(VIEW.phase==='summary'){
+    const left=Math.max(0,Math.ceil((sumDeadline-now)/1000));
+    const sEl=$('#sumov-in');// (le texte statique suffit)
+    if(now>=sumDeadline&&iAmDriver&&sumNextKey!==sumRound){sumNextKey=sumRound;hide('#sumov');sendAction({type:'next'});}
+    return;
+  }
 },1000);
 
 ask();
