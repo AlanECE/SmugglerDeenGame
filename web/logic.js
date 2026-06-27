@@ -122,6 +122,7 @@ export function setup(players) {
     nukeRound: 0,    // manche où apparaît la bombe nucléaire
     nukeSpawned: false,
     nukeWinner: null,// marchand qui a fait passer la bombe (gagne la partie)
+    kicked: [],      // joueurs exclus par l'hôte (ne peuvent plus rejoindre)
   };
   for (const id of players) addToRoster(s, id, null);
   return s;
@@ -129,6 +130,7 @@ export function setup(players) {
 
 function addToRoster(s, id, name) {
   if (s.players.some((p) => p.id === id)) return;
+  if ((s.kicked || []).includes(id)) return; // joueur exclu : ne peut plus rejoindre
   if (s.players.length >= meta.maxPlayers) return; // seule limite dure : 10
   const idx = s.players.length;
   s.players.push({
@@ -174,6 +176,14 @@ export function validateAction(state, playerId, action) {
     const n = parseInt(action.n, 10);
     if (!(n >= CFG.startMin && n <= meta.maxPlayers)) return { ok: false, error: `Entre ${CFG.startMin} et ${meta.maxPlayers}` };
     if (n < state.players.length) return { ok: false, error: "Déjà trop de joueurs présents" };
+    return { ok: true };
+  }
+
+  if (t === "kick") {
+    if (state.phase !== "lobby") return { ok: false, error: "Exclusion possible seulement avant le lancement" };
+    if (!isHost) return { ok: false, error: "Seul l'hôte peut exclure" };
+    if (action.target === playerId) return { ok: false, error: "Tu ne peux pas t'exclure" };
+    if (!findPlayer(state, action.target)) return { ok: false, error: "Joueur introuvable" };
     return { ok: true };
   }
 
@@ -317,6 +327,16 @@ export function applyAction(state, playerId, action) {
 
   if (t === "set_cap") {
     s.cap = parseInt(action.n, 10);
+    return s;
+  }
+
+  if (t === "kick") {
+    const tgt = action.target;
+    if (tgt !== s.hostId && findPlayer(s, tgt)) {
+      s.players = s.players.filter((p) => p.id !== tgt);
+      if (!s.kicked.includes(tgt)) s.kicked.push(tgt);
+      if (!s.players.some((p) => p.id === s.hostId) && s.players[0]) s.hostId = s.players[0].id;
+    }
     return s;
   }
 
@@ -617,6 +637,7 @@ export function viewFor(state, playerId) {
     })),
     chat: state.chat,
     begging: state.begging || null,
+    kicked: (state.kicked || []).includes(playerId),
     canBeg: (state.phase === "prepare" || state.phase === "summary") && state.round >= 2 &&
             !!me && me.coins < CFG.begThreshold && !(state.begged || []).includes(playerId) && !state.begging,
     // dette morale : ce que JE dois à chacun (mes bienfaiteurs)

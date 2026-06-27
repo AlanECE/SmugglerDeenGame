@@ -52,6 +52,7 @@ h1{font-size:24px;text-align:center}h2{font-size:19px}h3{font-size:15px;margin-b
 .chip.me{border-color:var(--gold)}.chip b{color:var(--gold)}
 .chip.ready{border-color:var(--green)}
 .tag{font-size:11px;background:var(--gold);color:#2a1d00;padding:2px 7px;border-radius:6px}
+.kickx{background:var(--red);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;font-weight:800;cursor:pointer;line-height:1;padding:0;margin-left:2px}
 .score{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-bottom:12px}
 
 .code-row{display:flex;gap:8px;align-items:center;margin-top:8px}
@@ -353,6 +354,7 @@ $('#nameinput').addEventListener('keydown',e=>{if(e.key==='Enter')$('#namego').c
 /* ============ rendu ============ */
 function render(){
   if(!VIEW){$('#root').innerHTML='<div class="card"><p class="muted">Connexion…</p></div>';return;}
+  if(VIEW.kicked){renderKicked();return;}
   if(!myName)ask();
   // ré-inscription auto si on n'est pas encore dans la partie (filet anti-spectateur, même sans pseudo)
   if(VIEW.phase==='lobby'&&!VIEW.inRoster&&Date.now()-lastHello>1200){lastHello=Date.now();sendAction({type:'hello',name:myName||'Joueur'});sendAction({type:'avatar',avatar:myAvatar});}
@@ -450,7 +452,7 @@ function renderLobby(){
    <div class="card">
      <h2>Joueurs (${VIEW.players.length}/${VIEW.cfg.maxPlayers})</h2>
      <div class="score" style="margin-top:12px">${VIEW.players.map(p=>`<span class="chip ${p.id===VIEW.you?'me':''}">
-        ${avImg(p.avatar,'')}${esc(p.name)}${p.isHost?' <span class="tag">Hôte</span>':''}</span>`).join('')}</div>
+        ${avImg(p.avatar,'')}${esc(p.name)}${p.isHost?' <span class="tag">Hôte</span>':''}${(isHost&&p.id!==VIEW.you)?` <button class="kickx" data-k="${p.id}" title="Exclure">✕</button>`:''}</span>`).join('')}</div>
      <p class="muted" id="lobinfo">${enough?(isHost?'Prêt ? Lance la partie !':"En attente de l'hôte…"):`Il faut au moins ${VIEW.cfg.startMin} joueurs.`}</p>
      ${isHost?`<button class="btn btn-primary btn-big" id="startbtn" ${enough?'':'disabled'}>Lancer la partie</button>`:''}
      <p class="error" id="errline"></p>
@@ -458,6 +460,7 @@ function renderLobby(){
   $('#copy').onclick=()=>{const i=$('#invlink');i.select();navigator.clipboard&&navigator.clipboard.writeText(location.href);const b=$('#copy');b.textContent='Copié ✓';setTimeout(()=>b.textContent='Copier',1500);};
   document.querySelectorAll('.avpick').forEach(el=>el.onclick=()=>{myAvatar=+el.dataset.i;localStorage.setItem('sd-av',myAvatar);Snd.pick();sendAction({type:'avatar',avatar:myAvatar});});
   const en=$('#editname');if(en)en.onclick=openNameModal;
+  document.querySelectorAll('.kickx').forEach(b=>b.onclick=()=>{if(confirm('Exclure ce joueur ?')){Snd.stamp();sendAction({type:'kick',target:b.dataset.k});}});
   const cm=$('#capm'),cp=$('#capp');
   if(cm)cm.onclick=()=>{Snd.tap();sendAction({type:'set_cap',n:Math.max(VIEW.cfg.startMin,VIEW.cfg.maxPlayers-1)});};
   if(cp)cp.onclick=()=>{Snd.tap();sendAction({type:'set_cap',n:Math.min(VIEW.cfg.hardMax,VIEW.cfg.maxPlayers+1)});};
@@ -487,6 +490,13 @@ function renderGame(){
   if(flashMsg)$('#errline').textContent=flashMsg;
 }
 
+function renderKicked(){
+  $('#chatwrap').style.display='none';
+  document.querySelectorAll('.ov,.announce,.begov,.fsov,.modal').forEach(e=>e.classList.remove('show'));
+  $('#root').innerHTML=`<div class="card" style="text-align:center;margin-top:40px;border-color:#ff6b6b">
+    <div style="font-size:46px">🚫</div><h2>Tu as été exclu</h2>
+    <p class="muted">L'hôte t'a retiré de la partie. Tu ne peux pas rejoindre ce salon.</p></div>`;
+}
 function renderSpectator(ph){
   ph.innerHTML=`${boardHtml('Partie<br>en cours')}<div class="card" style="text-align:center">
     <h2>👀 Tu observes</h2><p class="muted">La partie a déjà commencé — tu pourras jouer à la prochaine.</p></div>`;
