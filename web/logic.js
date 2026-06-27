@@ -147,6 +147,23 @@ function addToRoster(s, id, name) {
   if (!s.players.some((p) => p.id === s.hostId)) s.hostId = s.players[0].id;
   // Le nombre de joueurs prévu s'agrandit automatiquement si plus de monde rejoint (jusqu'à 10).
   if (s.players.length > (s.cap || 0)) s.cap = s.players.length;
+  // Arrivée EN COURS de partie : on intègre tout de suite le joueur comme acteur, pas spectateur.
+  // En phase de préparation, on lui distribue une main pour qu'il joue dès cette manche ;
+  // dans les autres phases (contrôle/bilan), il entre automatiquement à la manche suivante.
+  if (s.phase === "prepare" && id !== s.officerId && !s.subs[id]) {
+    s.subs[id] = { hand: freshHand(s.round), items: [], decl: [], bribe: 0, cost: 0, ready: false };
+  }
+}
+
+// Construit une main pour la manche courante avec garantie d'au moins une contrebande.
+function freshHand(round) {
+  const hand = [];
+  for (let i = 0; i < CFG.handSize; i++) hand.push(drawItem(round));
+  if (!hand.some((x) => !ITEMS[x].legal)) {
+    const illegalThisRound = poolForRound(round).filter((x) => !ITEMS[x].legal);
+    if (illegalThisRound.length) hand[randInt(hand.length)] = illegalThisRound[randInt(illegalThisRound.length)];
+  }
+  return hand;
 }
 
 // =============================================================
@@ -304,7 +321,9 @@ export function applyAction(state, playerId, action) {
     const existing = findPlayer(s, playerId);
     // Le pseudo n'est modifiable que dans le salon ; il est figé au lancement.
     if (existing) { if (s.phase === "lobby") existing.name = name; }
-    else if (s.phase === "lobby") addToRoster(s, playerId, name);
+    // Tout joueur présent peut rejoindre, même partie lancée : il devient joueur actif,
+    // jamais spectateur involontaire. (On n'ajoute pas une fois la partie terminée.)
+    else if (s.phase !== "ended") addToRoster(s, playerId, name);
     return s;
   }
 
@@ -504,15 +523,9 @@ function nextRound(s) {
   // Fin si plus assez de joueurs (besoin d'un douanier + au moins un marchand) ou manches épuisées.
   if (s.round > s.totalRounds || active.length < 2) { s.phase = "ended"; return; }
   s.officerId = pickOfficer(s);
-  const illegalThisRound = poolForRound(s.round).filter((x) => !ITEMS[x].legal);
   for (const id of smugglerIds(s)) {
-    const hand = [];
-    for (let i = 0; i < CFG.handSize; i++) hand.push(drawItem(s.round));
     // Garantie : il y a toujours AU MOINS une contrebande dans la main.
-    if (!hand.some((x) => !ITEMS[x].legal)) {
-      hand[randInt(hand.length)] = illegalThisRound[randInt(illegalThisRound.length)];
-    }
-    s.subs[id] = { hand, items: [], decl: [], bribe: 0, cost: 0, ready: false };
+    s.subs[id] = { hand: freshHand(s.round), items: [], decl: [], bribe: 0, cost: 0, ready: false };
   }
   // Pistolet : JAMAIS en manche 1, au plus UN par manche, et rare.
   if (s.round > 1 && Math.random() < CFG.pistolRoundChance) {

@@ -356,8 +356,9 @@ function render(){
   if(!VIEW){$('#root').innerHTML='<div class="card"><p class="muted">Connexion…</p></div>';return;}
   if(VIEW.kicked){renderKicked();return;}
   if(!myName)ask();
-  // ré-inscription auto si on n'est pas encore dans la partie (filet anti-spectateur, même sans pseudo)
-  if(VIEW.phase==='lobby'&&!VIEW.inRoster&&Date.now()-lastHello>1200){lastHello=Date.now();sendAction({type:'hello',name:myName||'Joueur'});sendAction({type:'avatar',avatar:myAvatar});}
+  // ré-inscription auto si on n'est pas encore dans la partie (filet anti-spectateur, même sans pseudo,
+  // et même partie lancée : on rejoint comme joueur actif, jamais spectateur — sauf une fois la partie terminée)
+  if(!VIEW.inRoster&&VIEW.phase!=='ended'&&Date.now()-lastHello>1200){lastHello=Date.now();sendAction({type:'hello',name:myName||'Joueur'});sendAction({type:'avatar',avatar:myAvatar});}
   // annonce du douanier (5s) à chaque nouvelle manche
   if(VIEW.phase!=='lobby'&&VIEW.phase!=='ended'&&VIEW.officerId&&VIEW.round!==announcedRound){announcedRound=VIEW.round;showAnnounce();}
   // timer de préparation (60s)
@@ -498,8 +499,8 @@ function renderKicked(){
     <p class="muted">L'hôte t'a retiré de la partie. Tu ne peux pas rejoindre ce salon.</p></div>`;
 }
 function renderSpectator(ph){
-  ph.innerHTML=`${boardHtml('Partie<br>en cours')}<div class="card" style="text-align:center">
-    <h2>👀 Tu observes</h2><p class="muted">La partie a déjà commencé — tu pourras jouer à la prochaine.</p></div>`;
+  ph.innerHTML=`${boardHtml('Tu entres…')}<div class="card" style="text-align:center">
+    <h2>⏳ Tu rejoins la partie</h2><p class="muted">Installation en cours… tu joues dès la prochaine manche.</p></div>`;
 }
 function renderEliminated(ph){
   ph.innerHTML=`${boardHtml('☠️ Éliminé')}<div class="card" style="text-align:center;border-color:#ff6b6b">
