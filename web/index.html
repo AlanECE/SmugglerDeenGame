@@ -422,7 +422,7 @@ function boardHtml(centerHtml){
     nodes+=`<div class="${cls.join(' ')}" style="left:${x}%;top:${y}%">
       <div style="position:relative;display:inline-block">${avImg(p.avatar,'')}${badge}</div>
       <div class="seatname" style="${p.id===VIEW.you?'color:var(--gold)':''}">${esc(p.name)}</div>
-      <div class="seatcoins">${p.coins}💰</div></div>`;
+      ${p.id===VIEW.you?`<div class="seatcoins">${p.coins}💰</div>`:''}</div>`;
   });
   const bg=isUrl(BOARD)?`style="background-image:url('${BOARD}')"`:'';
   return `<div class="board ${n>6?'crowded':''}" ${bg}><div class="bcenter">${centerHtml||''}</div>${nodes}</div>`;
@@ -664,10 +664,10 @@ function renderEnded(ph){
   const nukeBanner=f.nukeWinner?`<div class="card" style="text-align:center;border-color:#b5e853;background:radial-gradient(circle at 50% 40%,rgba(181,232,83,.15),transparent)"><div style="font-size:40px">☢️</div><b>${esc((f.ranking.find(x=>x.id===f.nukeWinner)||{}).name||'')}</b> a fait passer la bombe nucléaire et <b>remporte la partie</b> !</div>`:'';
   ph.innerHTML=`${nukeBanner}<div class="card"><h2>🏁 Fin de la partie</h2>
     <div style="margin:14px 0">${f.ranking.map(r=>`<div class="rrow ${r.rank===1?'gold':''}" style="${r.eliminated?'opacity:.55':''}"><span class="rpos">${r.rank===1?'👑':r.rank}</span>
-      ${avImg(r.avatar||0,'big')}<span class="rnm">${r.eliminated?'☠️ ':''}${esc(r.name)}</span><b>${r.coins} 💰</b></div>`).join('')}</div>
+      ${avImg(r.avatar||0,'big')}<span class="rnm">${r.eliminated?'☠️ ':''}${esc(r.name)}</span>${r.rank===1?'<b>🏆</b>':''}</div>`).join('')}</div>
     ${f.awards.length?`<h3>Trophées</h3>${f.awards.map(a=>`<div class="award"><span class="ae">${a.emoji}</span><span><b>${a.label}</b> — ${esc(a.name)} (${a.value})</span></div>`).join('')}`:''}
     <h3 style="margin-top:16px">Statistiques</h3><div class="tablewrap"><table>
-      <tr><th>Joueur</th><th>📦</th><th>😏</th><th>🚨</th><th>🔍✓</th><th>💰</th></tr>
+      <tr><th>Joueur</th><th>📦</th><th>😏</th><th>🚨</th><th>🔍✓</th><th>🤝</th></tr>
       ${f.ranking.map(r=>`<tr><td>${esc(r.name)}</td><td>${r.stats.smuggledThrough}</td><td>${r.stats.liesSuccessful}</td><td>${r.stats.bustedAsSmuggler}</td><td>${r.stats.correctSearches}</td><td>${r.stats.bribesAccepted}</td></tr>`).join('')}
     </table></div>
     ${isHost?`<button class="btn btn-primary btn-big" id="rematch">🔁 Revanche (mêmes joueurs présents)</button>`:'<p class="muted">En attente de l’hôte…</p>'}</div>`;
@@ -741,12 +741,12 @@ function tcol(v){return v>0?'var(--green)':v<0?'#ff6b6b':'#fff';}
 function showSumOverlay(){
   const ev=(VIEW.summary&&VIEW.summary.events)||[];
   const t=roundTally();
-  const rows=[...VIEW.players].sort((a,b)=>b.coins-a.coins).map(p=>{const v=t[p.id]||0;
-    return `<div class="sumrow">${avImg(p.avatar,'')}<span class="rname">${p.eliminated?'☠️ ':p.isOfficer?'👮 ':''}${esc(p.name)}</span>
-      <span style="color:${tcol(v)};font-weight:700;min-width:42px;text-align:right">${v>0?'+':''}${v}</span>
-      <b style="margin-left:10px;min-width:54px;text-align:right">${p.coins} 💰</b></div>`;}).join('');
+  const rk=VIEW.rankById||{};
+  const rows=[...VIEW.players].sort((a,b)=>(rk[a.id]||99)-(rk[b.id]||99)).map(p=>{const v=t[p.id]||0;
+    return `<div class="sumrow"><span class="rpos">${rk[p.id]||'-'}</span>${avImg(p.avatar,'')}<span class="rname">${p.eliminated?'☠️ ':p.isOfficer?'👮 ':''}${esc(p.name)}</span>
+      <span style="color:${tcol(v)};font-weight:700;min-width:54px;text-align:right">${v>0?'+':''}${v} 💰</span></div>`;}).join('');
   $('#sumov-in').innerHTML=`<h2>Bilan de la manche ${VIEW.round}/${VIEW.totalRounds}</h2>
-    <div class="muted" style="font-size:12px">manche · solde</div>
+    <div class="muted" style="font-size:12px">classement · pièces gagnées cette manche</div>
     <div class="sumrows">${rows}</div>
     <div class="evlist">${ev.map(srow).join('')||'<p class="muted">—</p>'}</div>`;
   $('#sumov').classList.add('show');
@@ -817,8 +817,9 @@ function updateBegging(){
   document.querySelectorAll('.quickmsg .btn').forEach(x=>x.onclick=()=>sendAction({type:'chat',text:x.dataset.msg}));
 }
 function showBegRecap(){
-  const rows=[...VIEW.players].sort((a,b)=>b.coins-a.coins).map(p=>`<div class="sumrow">${avImg(p.avatar,'')}<span class="rname">${p.eliminated?'☠️ ':''}${esc(p.name)}</span><b style="color:${tcol(p.coins)}">${p.coins} 💰</b></div>`).join('');
-  $('#begov-in').innerHTML=`<h2>💸 Levée terminée</h2><div class="muted">Nouveaux soldes</div><div class="sumrows" style="margin-top:10px">${rows}</div>`;
+  const rk=VIEW.rankById||{};
+  const rows=[...VIEW.players].sort((a,b)=>(rk[a.id]||99)-(rk[b.id]||99)).map(p=>`<div class="sumrow"><span class="rpos">${rk[p.id]||'-'}</span>${avImg(p.avatar,'')}<span class="rname">${p.eliminated?'☠️ ':''}${esc(p.name)}</span></div>`).join('');
+  $('#begov-in').innerHTML=`<h2>💸 Levée terminée</h2><div class="muted">Classement</div><div class="sumrows" style="margin-top:10px">${rows}</div>`;
   $('#begov').classList.add('show');
 }
 

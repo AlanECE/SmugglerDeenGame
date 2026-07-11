@@ -643,7 +643,9 @@ export function viewFor(state, playerId) {
       startingCoins: CFG.startingCoins, begThreshold: CFG.begThreshold,
     },
     players: state.players.map((p) => ({
-      id: p.id, name: p.name, color: p.color, avatar: p.avatar || 0, coins: p.coins,
+      id: p.id, name: p.name, color: p.color, avatar: p.avatar || 0,
+      // Portefeuille privé : seul TON solde t'est envoyé ; celui des autres reste caché.
+      coins: p.id === playerId ? p.coins : null,
       isHost: p.id === state.hostId, isOfficer: p.id === state.officerId,
       eliminated: !!p.eliminated, negRounds: p.negRounds || 0,
       ready: state.subs[p.id] ? state.subs[p.id].ready : false,
@@ -656,6 +658,14 @@ export function viewFor(state, playerId) {
     // dette morale : ce que JE dois à chacun (mes bienfaiteurs)
     myCreditors: state.debts[playerId] || {},
   };
+
+  // Classement : positions uniquement (id -> rang), sans jamais révéler les totaux d'autrui.
+  // Éliminés classés derrière, puis tri décroissant par pièces.
+  const ranked = [...state.players].sort(
+    (a, b) => (a.eliminated ? 1 : 0) - (b.eliminated ? 1 : 0) || b.coins - a.coins
+  );
+  v.rankById = {};
+  ranked.forEach((p, i) => { v.rankById[p.id] = i + 1; });
 
   // Données privées du joueur (sa propre main)
   if (state.subs[playerId] && !isOfficer) {
@@ -699,8 +709,9 @@ export function viewFor(state, playerId) {
     }
     v.final = {
       ranking: ranking.map((p, i) => ({
+        // Pas de total de pièces : uniquement le classement (position) + stats de jeu.
         rank: i + 1, id: p.id, name: p.name, color: p.color, avatar: p.avatar || 0,
-        coins: p.coins, eliminated: !!p.eliminated, stats: p.stats,
+        eliminated: !!p.eliminated, stats: p.stats,
       })),
       awards: computeAwards(state),
       nukeWinner: state.nukeWinner || null,
