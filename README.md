@@ -43,6 +43,11 @@ faire passer leur cargaison (vraie ou bidon) avec un éventuel pot-de-vin.
 - État en mémoire (suffisant pour des parties entre amis)
 
 ## Lancer en local
+> ⚠️ **Note** : la version de référence du jeu (avec tours de table, objets de
+> fin de partie et jokers) est celle du dossier [`web/`](web), déployée en
+> ligne. Les dossiers `server/` et `public/` sont l'**ancienne version locale
+> Socket.IO**, sans ces nouveautés.
+
 ```bash
 npm install
 npm start

@@ -387,7 +387,7 @@ let announcedRound=-1, timerRound=-1, prepDeadline=0, autoLockedRound=-1, forced
 let ctrlKey=null, ctrlStart=0, ctrlPhase='wait', ctrlAutoKey=null, revealUntil=0;
 let sumRound=-1, sumDeadline=0, sumNextKey=null, sumShown=false, offPopShown=false, offDeadline=0;
 let begSeen=null, begStartLocal=0, begEndKey=null, begConfirm=null, begEndedFor=null;
-let jokAnnounceRound=-1, jokAnnounceUntil=0, eyeShownRound=-1, joseShownSeq=0;
+let jokAnnounceRound=-1, jokAnnounceUntil=0, eyeShownRound=-1;
 
 /* ============ websocket ============ */
 function buildWs(){const base=location.pathname.replace(/\/+$/,'');return (location.protocol==='https:'?'wss://':'ws://')+location.host+base+'/ws/'+room;}
@@ -425,15 +425,18 @@ function render(){
   // timer de préparation (60s)
   if(VIEW.phase==='prepare'){if(VIEW.round!==timerRound){timerRound=VIEW.round;prepDeadline=Date.now()+60000;autoLockedRound=-1;forcedRound=-1;}}
   else {prepDeadline=0;}
-  handleReveal();
-  handleJose();
-  // récap jokers de la manche (avant le premier contrôle) + classement détaillé (Œil d'El Hajj)
+  // récap jokers de la manche : calculé AVANT handleReveal pour que le reveal
+  // (ex. passage ivre auto-résolu dès le début du contrôle) soit différé après le récap.
   if(VIEW.phase==='inspect'&&VIEW.round!==jokAnnounceRound){
     jokAnnounceRound=VIEW.round;
     if(VIEW.jokerLog&&VIEW.jokerLog.length){jokAnnounceUntil=Date.now()+4200;showJokerAnnounce();}
     else jokAnnounceUntil=0;
   }
+  handleReveal();
+  handleJose();
   if(VIEW.eye&&eyeShownRound!==VIEW.round){eyeShownRound=VIEW.round;showEyeOverlay();}
+  // fermeture des modals de sélection quand la phase change (cible obsolète)
+  if(render._ph!==VIEW.phase){render._ph=VIEW.phase;hide('#jokpick');}
   // chronologie du contrôle (intro 4s -> négo 20s) par cible
   if(VIEW.phase==='inspect'&&VIEW.inspect){
     const k=VIEW.round+':'+VIEW.inspect.index;
@@ -508,10 +511,13 @@ function showEyeOverlay(){
 
 /* ---- José le chat : envoi anonyme sur l'écran des cibles ---- */
 function handleJose(){
-  if(!VIEW.jose||!VIEW.jose.forMe)return;
-  if(VIEW.jose.seq===joseShownSeq)return;
-  joseShownSeq=VIEW.jose.seq;
-  showJoseCat();
+  if(!VIEW.jose)return;
+  // sessionStorage : le chat ne rejoue pas si on recharge la page.
+  const seen=parseInt(sessionStorage.getItem('sd-jose')||'0',10);
+  if(VIEW.jose.seq<=seen)return;
+  sessionStorage.setItem('sd-jose',String(VIEW.jose.seq));
+  if(VIEW.jose.forMe)showJoseCat();
+  else if(VIEW.jose.sent)flash('🐈 José est parti miauler…');
 }
 function showJoseCat(){
   const ov=$('#catov');
@@ -602,9 +608,11 @@ function renderGame(){
   let body=`<div class="bar"><div>Manche <b style="color:var(--ink)">${VIEW.round}</b>/${VIEW.totalRounds}</div>
     ${cd||`<div class="muted" style="font-size:14px">${VIEW.phase==='inspect'?'Contrôle':VIEW.phase==='summary'?'Bilan':VIEW.phase==='ended'?'Fin':''}</div>`}
     <div>💰 <b>${me?me.coins:'-'}</b></div></div>`;
+  if(VIEW.eye)body+=`<div style="text-align:center;margin-bottom:10px"><button class="jok" id="eyebtn">👁️ Revoir le classement détaillé</button></div>`;
   if(VIEW.canBeg)body+=`<div class="card" style="text-align:center;border-color:#ff7b54;padding:12px"><b>Presque ruiné…</b> <button class="btn begbtn-main" style="margin-left:6px">🆘 Mendier</button></div>`;
   body+='<div id="phase"></div><p class="error" id="errline"></p>';
   $('#root').innerHTML=body;
+  const eb=$('#eyebtn');if(eb)eb.onclick=showEyeOverlay;
   const bb=$('.begbtn-main');if(bb)bb.onclick=()=>{Snd.gong();sendAction({type:'beg_start'});};
   const ph=$('#phase');
   const meP=VIEW.players.find(p=>p.id===VIEW.you);
@@ -634,7 +642,13 @@ function renderEliminated(ph){
 }
 
 /* préparation */
-function resetPrep(){if(lastPrepRound!==VIEW.round||!prep){lastPrepRound=VIEW.round;prep={sel:[],decl:[],bribe:0};}}
+function resetPrep(){
+  const hk=(VIEW.me&&VIEW.me.hand)?VIEW.me.hand.join('|'):'';
+  if(lastPrepRound!==VIEW.round||!prep){lastPrepRound=VIEW.round;prep={sel:[],decl:[],bribe:0,hk};}
+  // La main a changé en cours de préparation (Voleur pro max) : les indices
+  // sélectionnés ne pointent plus les bons objets — on vide le coffre en cours.
+  else if(prep.hk!==hk){prep.sel=[];prep.hk=hk;flash('🥷 On t\'a volé un objet — revérifie ton coffre !');}
+}
 function renderPrepare(ph){
   const officer=VIEW.players.find(p=>p.isOfficer);
   if(VIEW.you===VIEW.officerId){
@@ -671,6 +685,7 @@ function renderPrepare(ph){
     <button class="btn btn-ghost btn-small" id="dhonest" style="margin-top:8px">Déclarer comme mon coffre</button>
     <div class="lab">Pot-de-vin 💰 <span id="bv">${prep.bribe}</span> (max ${maxB})</div>
     <input type="range" id="brange" min="0" max="${maxB}" value="${Math.min(prep.bribe,maxB)}">
+    ${(VIEW.me.stolen&&VIEW.me.stolen.length)?`<div style="margin-top:8px">Dans ta valise (volés, hors limite) : ${VIEW.me.stolen.map(id=>`<span class="stolechip">${ITEMS[id].em} ${ITEMS[id].nm} 🥷</span>`).join('')}</div>`:''}
     ${VIEW.me.hamoudActive?`<div class="jactive">🥤 Hamoud actif — ta cargaison passera direct</div>`:''}
     ${VIEW.me.doubleActive?`<div class="jactive">✨ Double point actif</div>`:''}
     <button class="btn btn-primary btn-big" id="lock">Verrouiller le coffre</button>
@@ -775,7 +790,9 @@ function renderInspect(ph){
     <div class="card" style="text-align:center;border-color:${tgt.color}">
       ${avImg(tgt.avatar,'huge')}<h2 style="margin:6px 0">${esc(tgt.name)}</h2>
       <div class="cd ${left<=5?'urgent':''}" style="font-size:18px">⏱ ${left}s de négociation</div>
-      ${panel}</div>`;
+      ${panel}</div>
+    ${jokerBarSection(isOff,VIEW.me||null)}`;
+  wireJokerBar();
   if(isOff){
     $('#pass').onclick=()=>{Snd.stamp();sendAction({type:'decide',target:tgt.id,action:'pass'});};
     $('#open').onclick=()=>{Snd.whoosh();sendAction({type:'decide',target:tgt.id,action:'open'});};
@@ -793,13 +810,16 @@ function renderSummary(ph){
   const ev=(VIEW.summary&&VIEW.summary.events)||[];const can=VIEW.officerId===VIEW.you||VIEW.hostId===VIEW.you;
   ph.innerHTML=`<div class="card"><h2>Bilan de la manche ${VIEW.round}</h2>
     <div style="margin:14px 0">${ev.map(srow).join('')}</div>
-    ${can?`<button class="btn btn-primary btn-big" id="next">${VIEW.round>=VIEW.totalRounds?'Voir le classement':'Manche suivante'}</button>`:'<p class="muted">En attente du douanier…</p>'}</div>`;
+    ${can?`<button class="btn btn-primary btn-big" id="next">${VIEW.round>=VIEW.totalRounds?'Voir le classement':'Manche suivante'}</button>`:'<p class="muted">En attente du douanier…</p>'}</div>
+    ${jokerBarSection(VIEW.officerId===VIEW.you,VIEW.me||null)}`;
+  wireJokerBar();
   const n=$('#next');if(n)n.onclick=()=>{Snd.whoosh();sendAction({type:'next'});};
 }
 function srow(e){const items=e.items.map(id=>ITEMS[id].em).join(' ');const net=e.smugglerDelta-(e.cost||0);let l,c;
-  if(e.outcome==='passed'){c='pass';l=`${e.hasPistol?'🔫 ':''}passe — ${e.isLie?'bluff 😏':'honnête'} · marchand ${fmt(net)} / douanier +${e.officerDelta}`;}
-  else if(e.outcome==='busted'){c='bust';l=`${e.hasPistol?'🔫 ':''}PRIS 🚨 · marchand ${fmt(net)} / douanier +${e.officerDelta}`;}
-  else{c='clean';l=`honnête ✅ · marchand ${fmt(net)} / douanier ${fmt(e.officerDelta)}`;}
+  const marks=`${e.drunk?'🥤 ':''}${e.doubled?'✨ ':''}${e.hasPistol?'🔫 ':''}${(e.jokersCarried&&e.jokersCarried.length)?(e.jokersTo==='officer'?'🃏→👮 ':'🃏 '):''}`;
+  if(e.outcome==='passed'){c='pass';l=`${marks}passe — ${e.isLie?'bluff 😏':'honnête'} · marchand ${fmt(net)} / douanier +${e.officerDelta}`;}
+  else if(e.outcome==='busted'){c='bust';l=`${marks}PRIS 🚨 · marchand ${fmt(net)} / douanier +${e.officerDelta}`;}
+  else{c='clean';l=`${marks}honnête ✅ · marchand ${fmt(net)} / douanier ${fmt(e.officerDelta)}`;}
   return `<div class="srow ${c}"><b>${esc(e.smugglerName)}</b> <span class="it">${items}</span> <span>${l}</span></div>`;}
 
 /* fin */
@@ -820,10 +840,15 @@ function renderEnded(ph){
 }
 
 /* révélation */
+function revDur(r){return r.hasNuke?4600:r.hasPistol?3900:r.drunk?3200:(r.outcome==='busted'?3200:2400);}
 function handleReveal(){
   if(!VIEW.lastReveal){lastRevKey=null;return;}
   const r=VIEW.lastReveal;const key=VIEW.round+'-'+r.smugglerId;
-  if(key===lastRevKey)return;lastRevKey=key;showReveal(r);
+  if(key===lastRevKey)return;lastRevKey=key;
+  // Si le récap jokers est à l'écran, on montre le résultat APRÈS lui.
+  const delay=Math.max(0,jokAnnounceUntil-Date.now());
+  if(delay>0){revealUntil=jokAnnounceUntil+revDur(r);setTimeout(()=>showReveal(r),delay);}
+  else showReveal(r);
 }
 function showReveal(r){
   const ov=$('#ov'),card=$('#rev');
@@ -870,7 +895,7 @@ function showReveal(r){
   card.className='rev '+cls+(r.outcome==='busted'||r.hasPistol||r.hasNuke?' flash':'');
   card.innerHTML=`${top}<h2>${title}</h2>${avs}<div class="revit">${items}</div><div class="money">${money}</div>`;
   ov.classList.add('show');setTimeout(()=>card.classList.add('open'),60);
-  const dur=r.hasNuke?4600:r.hasPistol?3900:r.drunk?3200:(r.outcome==='busted'?3200:2400);
+  const dur=revDur(r);
   revealUntil=Date.now()+dur;
   clearTimeout(showReveal._t);showReveal._t=setTimeout(()=>{ov.classList.remove('show');card.classList.remove('open');},dur);
 }
@@ -886,20 +911,25 @@ function itemCard(id,extra){const it=ITEMS[id];const c=document.createElement('d
   const vl=it.nuke?'FIN / −50':it.joker?'JOKER 🃏':`−${it.cost}→+${it.value}`;
   c.innerHTML=`<div class="em">${it.em}</div><div class="nm">${it.nm}</div><div class="vl">${vl}</div>`;return c;}
 
-/* ============ JOKERS : barre d'activation ============ */
+/* ============ JOKERS : barre d'activation (adaptée à la phase) ============ */
 function jokerBarSection(isOfficer,sub){
   const mj=VIEW.myJokers||{};
   const has=k=>(mj[k]||0)>0;
-  if(!has('hamoud')&&!has('double')&&!has('eye')&&!has('jose')&&!has('thief')&&!has('leech'))return '';
+  const ph=VIEW.phase;
+  const meP=meRec();
+  if(meP&&meP.eliminated)return '';
   let btns='';
-  if(!isOfficer&&sub){
+  // Jokers de préparation uniquement (marchands)
+  if(ph==='prepare'&&!isOfficer&&sub){
     if(has('hamoud'))btns+=`<button class="jok ${sub.hamoudActive?'dis':''}" id="jk-hamoud" ${sub.hamoudActive?'disabled':''}>${JOKERS.hamoud.em} ${sub.hamoudActive?'Activé ✓':'Hamoud Boualem'}${mj.hamoud>1?' ×'+mj.hamoud:''}</button>`;
     if(has('double'))btns+=`<button class="jok ${sub.doubleActive?'dis':''}" id="jk-double" ${sub.doubleActive?'disabled':''}>${JOKERS.double.em} ${sub.doubleActive?'Activé ✓':'Double point'}${mj.double>1?' ×'+mj.double:''}</button>`;
     if(has('thief'))btns+=`<button class="jok ${VIEW.thief?'dis':''}" id="jk-thief" ${VIEW.thief?'disabled':''}>${JOKERS.thief.em} Voleur pro max${mj.thief>1?' ×'+mj.thief:''}</button>`;
   }
+  // Sangsue : au début de manche (préparation), marchand ou douanier
+  if(ph==='prepare'&&has('leech'))btns+=`<button class="jok" id="jk-leech">${JOKERS.leech.em} Sangsue${mj.leech>1?' ×'+mj.leech:''}</button>`;
+  // Œil & José : utilisables à tout moment de la manche (préparation, contrôle, bilan)
   if(has('eye'))btns+=`<button class="jok" id="jk-eye">${JOKERS.eye.em} L'œil d'El Hajj${mj.eye>1?' ×'+mj.eye:''}</button>`;
   if(has('jose'))btns+=`<button class="jok" id="jk-jose">${JOKERS.jose.em} José${mj.jose>1?' ×'+mj.jose:''}</button>`;
-  if(has('leech'))btns+=`<button class="jok" id="jk-leech">${JOKERS.leech.em} Sangsue${mj.leech>1?' ×'+mj.leech:''}</button>`;
   if(!btns)return '';
   return `<div class="card jokbar"><h3 style="color:#e0aaff">🃏 Tes jokers</h3><div class="joks">${btns}</div></div>`;
 }

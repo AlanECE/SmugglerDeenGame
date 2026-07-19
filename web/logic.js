@@ -440,6 +440,11 @@ export function validateAction(state, playerId, action) {
 export function applyAction(state, playerId, action) {
   const s = clone(state);
   const t = action.type;
+  // Migration des salons créés AVANT l'ajout des jokers (état déjà en base) :
+  // on garantit la présence des nouveaux champs pour ne jamais crasher.
+  if (!Array.isArray(s.jokerLog)) s.jokerLog = [];
+  if (!s.thieves || typeof s.thieves !== "object") s.thieves = {};
+  if (!s.tours) s.tours = 2;
 
   if (t === "hello") {
     const name = String(action.name || "Joueur").slice(0, 16) || "Joueur";
@@ -612,10 +617,17 @@ export function applyAction(state, playerId, action) {
     if (i !== -1 && thief && victim) {
       list.splice(i, 1);
       // Volé dans un coffre verrouillé : on retire aussi l'objet de la déclaration
-      // (la victime ne devient pas menteuse à son insu).
+      // (la victime ne devient pas menteuse à son insu) et on lui REMBOURSE le
+      // coût d'achat qu'elle avait payé au verrouillage — l'objet n'est plus à elle.
       if (from === "items") {
         const d = vsub.decl.indexOf(action.item);
         if (d !== -1) vsub.decl.splice(d, 1);
+        const refund = ITEMS[action.item].cost || 0;
+        if (refund && vsub.ready) {
+          victim.coins += refund;
+          victim.stats.netGain += refund;
+          vsub.cost = Math.max(0, (vsub.cost || 0) - refund);
+        }
       }
       // Direct dans MA valise, gratuit, même pleine (hors limite de 3).
       const mySub = s.subs[playerId];
