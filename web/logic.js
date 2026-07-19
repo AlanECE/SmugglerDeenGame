@@ -21,6 +21,10 @@ const CFG = {
   illegalWeight: 1,
   pistolRoundChance: 0.28, // proba qu'UN pistolet apparaisse dans une manche (manche 2+)
   begThreshold: 3,      // mendicité possible si solde < 3
+  jokerRoundChance: 0.6, // proba qu'UN joker apparaisse dans une main cette manche
+  leechAmount: 10,      // pièces aspirées par la Sangsue
+  toursMin: 1,          // tours de table réglables par l'hôte dans le salon
+  toursMax: 4,
 };
 
 // Économie :
@@ -42,33 +46,51 @@ const ITEMS = {
   diamonds: { name: "Diamants volés", legal: false, cost: 6, value: 12, penalty: 13 },
   ivory: { name: "Ivoire", legal: false, cost: 7, value: 14, penalty: 16 },
   arms: { name: "Armes", legal: false, cost: 8, value: 16, penalty: 18 },
+  // Fin de partie : très gros gains, très grosses pertes.
+  art: { name: "Tableau volé", legal: false, cost: 9, value: 18, penalty: 20 },
+  gold: { name: "Lingots d'or", legal: false, cost: 11, value: 24, penalty: 27 },
   // Contrebande ultime : éco spéciale (+30 / -25), exempte du coût d'achat.
   pistol: { name: "Pistolet", legal: false, cost: 0, value: 30, penalty: 25, special: true },
   // Bombe nucléaire : 1 fois/partie. Si elle passe -> fin de partie, le marchand GAGNE.
   // Si saisie -> -50 pièces.
   nuke: { name: "Bombe nucléaire", legal: false, cost: 0, value: 0, penalty: 50, special: true, nuke: true },
+  // Jokers : objets à faire PASSER en douane pour les acquérir. Aucune valeur marchande.
+  // Si le douanier ouvre le coffre, c'est LUI qui confisque et détient le joker.
+  joker_hamoud: { name: "Hamoud Boualem", legal: false, cost: 0, value: 0, penalty: 0, joker: "hamoud" },
+  joker_double: { name: "Double point", legal: false, cost: 0, value: 0, penalty: 0, joker: "double" },
+  joker_eye: { name: "L'œil d'El Hajj", legal: false, cost: 0, value: 0, penalty: 0, joker: "eye" },
+  joker_jose: { name: "José", legal: false, cost: 0, value: 0, penalty: 0, joker: "jose" },
+  joker_thief: { name: "Voleur pro max", legal: false, cost: 0, value: 0, penalty: 0, joker: "thief" },
+  joker_leech: { name: "Sangsue", legal: false, cost: 0, value: 0, penalty: 0, joker: "leech" },
 };
 const LEGAL_IDS = Object.keys(ITEMS).filter((k) => ITEMS[k].legal && !ITEMS[k].special);
+const JOKER_ITEM_IDS = Object.keys(ITEMS).filter((k) => ITEMS[k].joker);
 
-// Diversité croissante : nouveaux items illégaux de plus en plus risqués à chaque manche.
-function poolForRound(round) {
-  const ids = ["pasta", "eggs", "weed"];            // manche 1
-  if (round >= 2) ids.push("coffee", "watches");    // manche 2
-  if (round >= 3) ids.push("cheese", "fakepapers"); // manche 3
-  if (round >= 4) ids.push("cocaine");              // manche 4
-  if (round >= 5) ids.push("diamonds");             // manche 5 : +risqué
-  if (round >= 6) ids.push("ivory");                // manche 6 : ++
-  if (round >= 7) ids.push("arms");                 // manche 7+ : +++
+// Diversité croissante PROPORTIONNELLE à la partie : quel que soit le nombre de
+// manches choisi par l'hôte, les objets rares (gros gains / grosses pertes)
+// se débloquent au fil de la progression, les plus gros en toute fin.
+function poolForRound(round, totalRounds) {
+  const T = Math.max(1, totalRounds || CFG.totalRounds);
+  const prog = Math.min(1, round / T);
+  const ids = ["pasta", "eggs", "weed"];                    // début
+  if (round >= 2 || prog >= 0.15) ids.push("coffee", "watches");
+  if (round >= 3 || prog >= 0.3) ids.push("cheese", "fakepapers");
+  if (prog >= 0.4) ids.push("cocaine");
+  if (prog >= 0.55) ids.push("diamonds");
+  if (prog >= 0.65) ids.push("ivory");
+  if (prog >= 0.75) ids.push("arms");
+  if (prog >= 0.85) ids.push("art");                        // très gros
+  if (prog >= 0.95) ids.push("gold");                       // dernière ligne droite
   return ids;
 }
 const COLORS = ["#e63946", "#457b9d", "#2a9d8f", "#e9c46a", "#9d4edd", "#f4a261"];
 
 // ---- utilitaires purs ----
 function randInt(n) { return Math.floor(Math.random() * n); }
-function drawItem(round) {
+function drawItem(round, totalRounds) {
   // Le pistolet n'est JAMAIS tiré normalement (inséré à part, manche 2+).
   const pool = [];
-  for (const id of poolForRound(round)) {
+  for (const id of poolForRound(round, totalRounds)) {
     const w = ITEMS[id].legal ? CFG.legalWeight : CFG.illegalWeight;
     for (let i = 0; i < w; i++) pool.push(id);
   }
@@ -86,6 +108,12 @@ function newStats() {
     correctSearches: 0, wrongSearches: 0, bribesAccepted: 0,
     bribesPaid: 0, winStreak: 0, bestStreak: 0, netGain: 0,
   };
+}
+function hasJoker(p, k) { return !!(p && p.jokers && p.jokers[k] > 0); }
+function consumeJoker(p, k) { if (hasJoker(p, k)) p.jokers[k] -= 1; }
+function grantJoker(p, k) { if (!p.jokers) p.jokers = {}; p.jokers[k] = (p.jokers[k] || 0) + 1; }
+function newSub(round, totalRounds) {
+  return { hand: freshHand(round, totalRounds), items: [], decl: [], bribe: 0, cost: 0, ready: false, stolen: [], hamoudActive: false, doubleActive: false };
 }
 function findPlayer(s, id) { return s.players.find((p) => p.id === id); }
 function smugglerIds(s) { return s.players.filter((p) => p.id !== s.officerId && !p.eliminated).map((p) => p.id); }
@@ -119,6 +147,11 @@ export function setup(players) {
     begging: null,   // session de mendicité en cours { id, byName, total, donations:[] }
     debts: {},       // dette morale : beneficiaryId -> { donorId: total donné }
     cap: 10,         // nombre de joueurs max réglable par l'hôte (3 à 10) — 10 par défaut
+    tours: 2,        // tours de table : chaque joueur passe douanier N fois (réglable dans le salon)
+    jokerLog: [],    // activations de jokers de la manche (affichées avant le contrôle, sauf José)
+    thieves: {},     // Voleur pro max actifs cette manche : playerId -> true
+    jose: null,      // dernier envoi de José { seq, from, targets }
+    joseSeq: 0,
     nukeRound: 0,    // manche où apparaît la bombe nucléaire
     nukeSpawned: false,
     nukeWinner: null,// marchand qui a fait passer la bombe (gagne la partie)
@@ -141,6 +174,8 @@ function addToRoster(s, id, name) {
     coins: CFG.startingCoins,
     negRounds: 0,       // manches consécutives en solde négatif
     eliminated: false,  // éliminé après >3 manches en négatif
+    jokers: {},         // jokers détenus (acquis en les faisant passer) : type -> nombre
+    eyeRound: 0,        // manche où L'œil d'El Hajj est actif pour ce joueur
     stats: newStats(),
   });
   // L'hôte est toujours un joueur présent (utile après une revanche qui réinitialise la liste).
@@ -151,16 +186,16 @@ function addToRoster(s, id, name) {
   // En phase de préparation, on lui distribue une main pour qu'il joue dès cette manche ;
   // dans les autres phases (contrôle/bilan), il entre automatiquement à la manche suivante.
   if (s.phase === "prepare" && id !== s.officerId && !s.subs[id]) {
-    s.subs[id] = { hand: freshHand(s.round), items: [], decl: [], bribe: 0, cost: 0, ready: false };
+    s.subs[id] = newSub(s.round, s.totalRounds);
   }
 }
 
 // Construit une main pour la manche courante avec garantie d'au moins une contrebande.
-function freshHand(round) {
+function freshHand(round, totalRounds) {
   const hand = [];
-  for (let i = 0; i < CFG.handSize; i++) hand.push(drawItem(round));
+  for (let i = 0; i < CFG.handSize; i++) hand.push(drawItem(round, totalRounds));
   if (!hand.some((x) => !ITEMS[x].legal)) {
-    const illegalThisRound = poolForRound(round).filter((x) => !ITEMS[x].legal);
+    const illegalThisRound = poolForRound(round, totalRounds).filter((x) => !ITEMS[x].legal);
     if (illegalThisRound.length) hand[randInt(hand.length)] = illegalThisRound[randInt(illegalThisRound.length)];
   }
   return hand;
@@ -193,6 +228,14 @@ export function validateAction(state, playerId, action) {
     const n = parseInt(action.n, 10);
     if (!(n >= CFG.startMin && n <= meta.maxPlayers)) return { ok: false, error: `Entre ${CFG.startMin} et ${meta.maxPlayers}` };
     if (n < state.players.length) return { ok: false, error: "Déjà trop de joueurs présents" };
+    return { ok: true };
+  }
+
+  if (t === "set_tours") {
+    if (state.phase !== "lobby") return { ok: false, error: "Réglable seulement dans le salon" };
+    if (!isHost) return { ok: false, error: "Seul l'hôte règle le nombre de tours" };
+    const n = parseInt(action.n, 10);
+    if (!(n >= CFG.toursMin && n <= CFG.toursMax)) return { ok: false, error: `Entre ${CFG.toursMin} et ${CFG.toursMax} tours de table` };
     return { ok: true };
   }
 
@@ -306,6 +349,88 @@ export function validateAction(state, playerId, action) {
     return { ok: true };
   }
 
+  // ---- Jokers ----
+  const me = findPlayer(state, playerId);
+  const inGame = state.phase === "prepare" || state.phase === "inspect" || state.phase === "summary";
+
+  if (t === "use_hamoud") {
+    if (!me || me.eliminated) return { ok: false, error: "Tu ne peux pas jouer" };
+    if (!hasJoker(me, "hamoud")) return { ok: false, error: "Tu n'as pas de Hamoud Boualem" };
+    if (state.phase === "prepare") {
+      if (isOfficer) return { ok: false, error: "Le douanier ne peut pas se saouler lui-même" };
+      const sub = state.subs[playerId];
+      if (!sub) return { ok: false, error: "Aucune cargaison en cours" };
+      if (sub.hamoudActive) return { ok: false, error: "Déjà activé pour cette manche" };
+      return { ok: true };
+    }
+    if (state.phase === "inspect") {
+      if (state.inspectOrder[state.inspectIndex] !== playerId)
+        return { ok: false, error: "Utilisable seulement quand c'est TON tour au contrôle" };
+      return { ok: true };
+    }
+    return { ok: false, error: "Utilisable pendant la préparation ou ton contrôle" };
+  }
+
+  if (t === "use_double") {
+    if (!me || me.eliminated) return { ok: false, error: "Tu ne peux pas jouer" };
+    if (!hasJoker(me, "double")) return { ok: false, error: "Tu n'as pas de Double point" };
+    if (state.phase !== "prepare") return { ok: false, error: "Activable pendant la préparation" };
+    if (isOfficer) return { ok: false, error: "Réservé aux marchands" };
+    const sub = state.subs[playerId];
+    if (!sub) return { ok: false, error: "Aucune cargaison en cours" };
+    if (sub.doubleActive) return { ok: false, error: "Déjà activé pour cette manche" };
+    return { ok: true };
+  }
+
+  if (t === "use_eye") {
+    if (!me || me.eliminated) return { ok: false, error: "Tu ne peux pas jouer" };
+    if (!hasJoker(me, "eye")) return { ok: false, error: "Tu n'as pas L'œil d'El Hajj" };
+    if (!inGame) return { ok: false, error: "Utilisable en cours de partie" };
+    if (me.eyeRound === state.round) return { ok: false, error: "L'œil est déjà ouvert pour cette manche" };
+    return { ok: true };
+  }
+
+  if (t === "use_jose") {
+    if (!me || me.eliminated) return { ok: false, error: "Tu ne peux pas jouer" };
+    if (!hasJoker(me, "jose")) return { ok: false, error: "Tu n'as pas José" };
+    if (!inGame) return { ok: false, error: "Utilisable en cours de partie" };
+    const targets = Array.isArray(action.targets) ? action.targets : [];
+    const valid = targets.filter((id) => id !== playerId && findPlayer(state, id));
+    if (!valid.length) return { ok: false, error: "Choisis au moins un joueur" };
+    return { ok: true };
+  }
+
+  if (t === "use_thief") {
+    if (!me || me.eliminated) return { ok: false, error: "Tu ne peux pas jouer" };
+    if (!hasJoker(me, "thief")) return { ok: false, error: "Tu n'as pas de Voleur pro max" };
+    if (state.phase !== "prepare") return { ok: false, error: "Activable pendant la préparation" };
+    if (isOfficer) return { ok: false, error: "Le douanier n'a pas de valise" };
+    if (!state.subs[playerId]) return { ok: false, error: "Aucune cargaison en cours" };
+    if (state.thieves && state.thieves[playerId]) return { ok: false, error: "Voleur déjà en action" };
+    return { ok: true };
+  }
+
+  if (t === "steal") {
+    if (state.phase !== "prepare") return { ok: false, error: "Le vol se fait pendant la préparation" };
+    if (!state.thieves || !state.thieves[playerId]) return { ok: false, error: "Active d'abord le Voleur pro max" };
+    const tgt = action.target;
+    if (!tgt || tgt === playerId || !state.subs[tgt]) return { ok: false, error: "Cible invalide" };
+    const from = action.from === "chest" ? "items" : "hand";
+    const list = state.subs[tgt][from] || [];
+    if (!list.includes(action.item)) return { ok: false, error: "Objet introuvable chez ce joueur" };
+    return { ok: true };
+  }
+
+  if (t === "use_leech") {
+    if (!me || me.eliminated) return { ok: false, error: "Tu ne peux pas jouer" };
+    if (!hasJoker(me, "leech")) return { ok: false, error: "Tu n'as pas de Sangsue" };
+    if (state.phase !== "prepare") return { ok: false, error: "La Sangsue frappe au début de la manche (préparation)" };
+    const victim = findPlayer(state, action.target);
+    if (!victim || victim.id === playerId) return { ok: false, error: "Choisis un autre joueur" };
+    if (victim.eliminated) return { ok: false, error: "Ce joueur est éliminé" };
+    return { ok: true };
+  }
+
   return { ok: false, error: "Action inconnue" };
 }
 
@@ -349,6 +474,11 @@ export function applyAction(state, playerId, action) {
     return s;
   }
 
+  if (t === "set_tours") {
+    s.tours = parseInt(action.n, 10);
+    return s;
+  }
+
   if (t === "kick") {
     const tgt = action.target;
     if (tgt !== s.hostId && findPlayer(s, tgt)) {
@@ -362,8 +492,10 @@ export function applyAction(state, playerId, action) {
   if (t === "start") {
     s.round = 0;
     s.officerStartIndex = randInt(s.players.length);
-    // Assez de manches pour que chacun soit douanier exactement 2 fois.
-    s.totalRounds = 2 * s.players.length;
+    // Nombre de manches choisi par l'hôte : chacun est douanier `tours` fois.
+    const tours = Math.max(CFG.toursMin, Math.min(CFG.toursMax, parseInt(s.tours, 10) || 2));
+    s.tours = tours;
+    s.totalRounds = tours * s.players.length;
     // La bombe nucléaire apparaît une seule fois, dans une manche aléatoire (jamais la 1re).
     s.nukeSpawned = false;
     s.nukeWinner = null;
@@ -417,13 +549,92 @@ export function applyAction(state, playerId, action) {
 
   if (t === "decide") {
     const targetId = s.inspectOrder[s.inspectIndex];
-    const res = resolve(s, targetId, action.action === "open" ? "inspect" : "pass");
-    s.roundEvents.push(res);
-    s.lastReveal = res;
-    s.inspectIndex += 1;
-    // La bombe nucléaire qui passe met FIN à la partie : ce marchand gagne.
-    if (res.nukePassed) { s.nukeWinner = res.smugglerId; s.phase = "ended"; return s; }
-    if (s.inspectIndex >= s.inspectOrder.length) s.phase = "summary";
+    advanceDecision(s, targetId, action.action === "open" ? "inspect" : "pass", false);
+    return s;
+  }
+
+  // ---- Jokers ----
+  if (t === "use_hamoud") {
+    const p = findPlayer(s, playerId);
+    consumeJoker(p, "hamoud");
+    if (s.phase === "prepare") {
+      s.subs[playerId].hamoudActive = true;
+      s.jokerLog.push({ joker: "hamoud", byName: p.name });
+    } else {
+      // Contrôle en cours sur MOI : le douanier boit, tout passe immédiatement.
+      s.jokerLog.push({ joker: "hamoud", byName: p.name });
+      advanceDecision(s, playerId, "pass", true);
+    }
+    return s;
+  }
+
+  if (t === "use_double") {
+    const p = findPlayer(s, playerId);
+    consumeJoker(p, "double");
+    s.subs[playerId].doubleActive = true;
+    s.jokerLog.push({ joker: "double", byName: p.name });
+    return s;
+  }
+
+  if (t === "use_eye") {
+    const p = findPlayer(s, playerId);
+    consumeJoker(p, "eye");
+    p.eyeRound = s.round;
+    s.jokerLog.push({ joker: "eye", byName: p.name });
+    return s;
+  }
+
+  if (t === "use_jose") {
+    const p = findPlayer(s, playerId);
+    consumeJoker(p, "jose");
+    const targets = (Array.isArray(action.targets) ? action.targets : [])
+      .filter((id) => id !== playerId && findPlayer(s, id));
+    s.joseSeq = (s.joseSeq || 0) + 1;
+    // José reste ANONYME : jamais dans jokerLog, seuls les visés voient le chat.
+    s.jose = { seq: s.joseSeq, from: playerId, targets };
+    return s;
+  }
+
+  if (t === "use_thief") {
+    const p = findPlayer(s, playerId);
+    consumeJoker(p, "thief");
+    s.thieves[playerId] = true;
+    return s;
+  }
+
+  if (t === "steal") {
+    const thief = findPlayer(s, playerId);
+    const victim = findPlayer(s, action.target);
+    const vsub = s.subs[action.target];
+    const from = action.from === "chest" ? "items" : "hand";
+    const list = vsub[from];
+    const i = list.indexOf(action.item);
+    if (i !== -1 && thief && victim) {
+      list.splice(i, 1);
+      // Volé dans un coffre verrouillé : on retire aussi l'objet de la déclaration
+      // (la victime ne devient pas menteuse à son insu).
+      if (from === "items") {
+        const d = vsub.decl.indexOf(action.item);
+        if (d !== -1) vsub.decl.splice(d, 1);
+      }
+      // Direct dans MA valise, gratuit, même pleine (hors limite de 3).
+      const mySub = s.subs[playerId];
+      if (mySub) mySub.stolen.push(action.item);
+      s.jokerLog.push({ joker: "thief", byName: thief.name, targetName: victim.name });
+    }
+    delete s.thieves[playerId];
+    return s;
+  }
+
+  if (t === "use_leech") {
+    const p = findPlayer(s, playerId);
+    const victim = findPlayer(s, action.target);
+    consumeJoker(p, "leech");
+    victim.coins -= CFG.leechAmount;
+    victim.stats.netGain -= CFG.leechAmount;
+    p.coins += CFG.leechAmount;
+    p.stats.netGain += CFG.leechAmount;
+    s.jokerLog.push({ joker: "leech", byName: p.name, targetName: victim.name, amount: CFG.leechAmount });
     return s;
   }
 
@@ -497,6 +708,9 @@ export function applyAction(state, playerId, action) {
     s.nukeSpawned = false;
     s.nukeWinner = null;
     s.nukeRound = 0;
+    s.jokerLog = [];
+    s.thieves = {};
+    s.jose = null;
     addToRoster(s, playerId, keptName);
     if (s.players[0]) s.players[0].avatar = keptAvatar;
     return s;
@@ -513,6 +727,8 @@ function nextRound(s) {
   s.inspectOrder = [];
   s.inspectIndex = 0;
   s.begging = null; // une mendicité ne traverse pas les manches
+  s.jokerLog = [];  // le récap des jokers repart à zéro
+  s.thieves = {};   // un Voleur pro max non utilisé expire avec la manche
   // Élimination : >3 manches consécutives en solde négatif.
   for (const p of s.players) {
     if (p.coins < 0) p.negRounds = (p.negRounds || 0) + 1;
@@ -525,7 +741,7 @@ function nextRound(s) {
   s.officerId = pickOfficer(s);
   for (const id of smugglerIds(s)) {
     // Garantie : il y a toujours AU MOINS une contrebande dans la main.
-    s.subs[id] = { hand: freshHand(s.round), items: [], decl: [], bribe: 0, cost: 0, ready: false };
+    s.subs[id] = newSub(s.round, s.totalRounds);
   }
   // Pistolet : JAMAIS en manche 1, au plus UN par manche, et rare.
   if (s.round > 1 && Math.random() < CFG.pistolRoundChance) {
@@ -546,6 +762,17 @@ function nextRound(s) {
       s.nukeSpawned = true;
     }
   }
+  // Joker : au plus UN par manche, dans une main au hasard. Il faut le faire
+  // PASSER en douane pour le posséder — s'il est saisi, le douanier le garde.
+  if (Math.random() < CFG.jokerRoundChance) {
+    const sids = smugglerIds(s);
+    if (sids.length) {
+      const lucky = sids[randInt(sids.length)];
+      const h = s.subs[lucky].hand;
+      const slots = h.map((id, i) => (ITEMS[id].special ? -1 : i)).filter((i) => i >= 0);
+      if (slots.length) h[slots[randInt(slots.length)]] = JOKER_ITEM_IDS[randInt(JOKER_ITEM_IDS.length)];
+    }
+  }
   s.phase = "prepare";
 }
 
@@ -554,28 +781,60 @@ function beginInspect(s) {
   s.inspectOrder = smugglerIds(s).filter((id) => s.subs[id]);
   s.inspectIndex = 0;
   s.lastReveal = null;
+  // Les marchands qui ont déjà saoulé le douanier passent d'office.
+  autoResolveDrunk(s);
 }
 
-function resolve(s, smugglerId, action) {
+// Résout la cible courante puis avance la file (et enchaîne les passages "ivres").
+function advanceDecision(s, targetId, act, drunk) {
+  const res = resolve(s, targetId, act, drunk);
+  s.roundEvents.push(res);
+  s.lastReveal = res;
+  s.inspectIndex += 1;
+  // La bombe nucléaire qui passe met FIN à la partie : ce marchand gagne.
+  if (res.nukePassed) { s.nukeWinner = res.smugglerId; s.phase = "ended"; return; }
+  if (s.inspectIndex >= s.inspectOrder.length) { s.phase = "summary"; return; }
+  autoResolveDrunk(s);
+}
+
+function autoResolveDrunk(s) {
+  while (s.phase === "inspect" && s.inspectIndex < s.inspectOrder.length) {
+    const id = s.inspectOrder[s.inspectIndex];
+    const sub = s.subs[id];
+    if (!sub || !sub.hamoudActive) break;
+    advanceDecision(s, id, "pass", true);
+    return; // advanceDecision rappelle autoResolveDrunk si besoin
+  }
+  if (s.phase === "inspect" && s.inspectIndex >= s.inspectOrder.length) s.phase = "summary";
+}
+
+function resolve(s, smugglerId, action, drunk) {
   const officer = findPlayer(s, s.officerId);
   const smuggler = findPlayer(s, smugglerId);
   const sub = s.subs[smugglerId];
-  const items = sub.items.map((id) => ITEMS[id]);
+  // Valise effective = coffre choisi + objets volés (Voleur pro max, hors limite).
+  const effIds = [...sub.items, ...(sub.stolen || [])];
+  const items = effIds.map((id) => ITEMS[id]);
   const hasContraband = items.some((it) => !it.legal);
-  // Déclaration conforme : le coffre correspond EXACTEMENT à la liste déclarée.
+  // Déclaration conforme : le COFFRE choisi correspond EXACTEMENT à la déclaration.
+  // (Un objet volé légal ne rend pas menteur ; un volé illégal reste de la contrebande.)
   const matchesDeclaration = multisetEqual(sub.items, sub.decl);
   const isLie = hasContraband || !matchesDeclaration;
+  const jokersCarried = effIds.filter((id) => ITEMS[id].joker);
 
   const res = {
     smugglerId, smugglerName: smuggler.name, action,
-    items: sub.items, decl: sub.decl, bribe: sub.bribe, cost: sub.cost || 0,
-    isLie, hasContraband, hasPistol: sub.items.includes("pistol"), hasNuke: sub.items.includes("nuke"),
-    nukePassed: sub.items.includes("nuke") && action === "pass",
+    items: effIds, decl: sub.decl, bribe: sub.bribe, cost: sub.cost || 0,
+    isLie, hasContraband, hasPistol: effIds.includes("pistol"), hasNuke: effIds.includes("nuke"),
+    nukePassed: effIds.includes("nuke") && action === "pass",
+    drunk: !!drunk, doubled: false,
     outcome: null, smugglerDelta: 0, officerDelta: 0,
   };
 
   if (action === "pass") {
-    const resale = items.reduce((a, it) => a + it.value, 0);
+    let resale = items.reduce((a, it) => a + it.value, 0);
+    // Double point : les gains de la manche sont doublés pour ce marchand.
+    if (sub.doubleActive && resale > 0) { resale *= 2; res.doubled = true; }
     res.smugglerDelta = resale - sub.bribe;
     res.officerDelta = sub.bribe;
     res.outcome = "passed";
@@ -601,7 +860,8 @@ function resolve(s, smugglerId, action) {
     officer.stats.correctSearches += 1;
   } else {
     // Honnête : le douanier verse le prix de la marchandise au joueur honnête.
-    const resale = items.reduce((a, it) => a + it.value, 0);
+    let resale = items.reduce((a, it) => a + it.value, 0);
+    if (sub.doubleActive && resale > 0) { resale *= 2; res.doubled = true; }
     res.smugglerDelta = resale;
     res.officerDelta = -resale;
     res.outcome = "clean";
@@ -612,6 +872,14 @@ function resolve(s, smugglerId, action) {
     smuggler.stats.winStreak += 1;
     smuggler.stats.bestStreak = Math.max(smuggler.stats.bestStreak, smuggler.stats.winStreak);
     officer.stats.wrongSearches += 1;
+  }
+  // Jokers transportés : ils passent -> le marchand les acquiert ;
+  // coffre ouvert -> le DOUANIER les confisque et les détient.
+  if (jokersCarried.length) {
+    const receiver = res.outcome === "busted" ? officer : smuggler;
+    for (const id of jokersCarried) grantJoker(receiver, ITEMS[id].joker);
+    res.jokersCarried = jokersCarried;
+    res.jokersTo = res.outcome === "busted" ? "officer" : "smuggler";
   }
   smuggler.stats.netGain += res.smugglerDelta;
   officer.stats.netGain += res.officerDelta;
@@ -641,7 +909,9 @@ export function viewFor(state, playerId) {
       startMin: CFG.startMin, maxPlayers: state.cap || meta.maxPlayers, hardMax: meta.maxPlayers,
       maxBribe: CFG.maxBribe, cargoMin: CFG.cargoMin, cargoMax: CFG.cargoMax,
       startingCoins: CFG.startingCoins, begThreshold: CFG.begThreshold,
+      toursMin: CFG.toursMin, toursMax: CFG.toursMax,
     },
+    tours: state.tours || 2,
     players: state.players.map((p) => ({
       id: p.id, name: p.name, color: p.color, avatar: p.avatar || 0,
       // Portefeuille privé : seul TON solde t'est envoyé ; celui des autres reste caché.
@@ -649,6 +919,8 @@ export function viewFor(state, playerId) {
       isHost: p.id === state.hostId, isOfficer: p.id === state.officerId,
       eliminated: !!p.eliminated, negRounds: p.negRounds || 0,
       ready: state.subs[p.id] ? state.subs[p.id].ready : false,
+      // Nombre de jokers détenus (types secrets, total public : ça met la pression).
+      jcount: Object.values(p.jokers || {}).reduce((a, b) => a + b, 0),
     })),
     chat: state.chat,
     begging: state.begging || null,
@@ -667,12 +939,43 @@ export function viewFor(state, playerId) {
   v.rankById = {};
   ranked.forEach((p, i) => { v.rankById[p.id] = i + 1; });
 
+  // ---- Jokers ----
+  v.myJokers = me ? (me.jokers || {}) : {};
+  // Récap public des activations de la manche (José n'y figure JAMAIS).
+  v.jokerLog = state.jokerLog || [];
+  // José : seuls les visés voient le chat ; l'envoyeur reçoit un accusé anonyme.
+  if (state.jose) {
+    v.jose = {
+      seq: state.jose.seq,
+      forMe: state.jose.targets.includes(playerId),
+      sent: state.jose.from === playerId,
+    };
+  }
+  // L'œil d'El Hajj : classement détaillé (pièces exactes) pour son utilisateur, cette manche.
+  if (me && me.eyeRound === state.round && state.round > 0) {
+    v.eye = [...state.players]
+      .sort((a, b) => (a.eliminated ? 1 : 0) - (b.eliminated ? 1 : 0) || b.coins - a.coins)
+      .map((p, i) => ({ rank: i + 1, id: p.id, name: p.name, color: p.color, avatar: p.avatar || 0, coins: p.coins, eliminated: !!p.eliminated }));
+  }
+  // Voleur pro max actif : vision des mains et coffres des autres marchands.
+  if (state.thieves && state.thieves[playerId] && state.phase === "prepare") {
+    v.thief = Object.keys(state.subs)
+      .filter((id) => id !== playerId)
+      .map((id) => {
+        const p = findPlayer(state, id);
+        const sub = state.subs[id];
+        return p ? { id, name: p.name, color: p.color, avatar: p.avatar || 0, ready: sub.ready, hand: sub.hand, chest: sub.items } : null;
+      })
+      .filter(Boolean);
+  }
+
   // Données privées du joueur (sa propre main)
   if (state.subs[playerId] && !isOfficer) {
     const sub = state.subs[playerId];
     v.me = {
       hand: sub.hand, items: sub.items, decl: sub.decl,
       bribe: sub.bribe, cost: sub.cost || 0, ready: sub.ready,
+      stolen: sub.stolen || [], hamoudActive: !!sub.hamoudActive, doubleActive: !!sub.doubleActive,
     };
   }
 

@@ -226,6 +226,46 @@ td:first-child,th:first-child{text-align:left}
 .fsov.show{display:grid;animation:fade .2s}
 .fscard{width:min(540px,96vw);text-align:center;animation:apop .4s}
 @media(min-width:560px){.decide{grid-template-columns:1fr 1fr}}
+
+/* ---- JOKERS ---- */
+.item.jokr{border:2px solid #c77dff;background:linear-gradient(160deg,#2b2140,#171021);box-shadow:0 0 14px rgba(199,125,255,.45);position:relative}
+.item.jokr .nm{color:#e0aaff}
+.item.jokr::after{content:"JOKER";position:absolute;top:3px;right:3px;font-size:8px;font-weight:800;color:#fff;background:#9d4edd;padding:1px 4px;border-radius:4px}
+.jokbar{border-color:#9d4edd!important;padding:12px!important}
+.joks{display:flex;flex-wrap:wrap;gap:7px}
+.jok{background:linear-gradient(160deg,#2b2140,#171021);border:1px solid #9d4edd;color:#e0aaff;border-radius:999px;padding:8px 13px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.jok:active{transform:scale(.96)}
+.jok.dis{opacity:.5}
+.jbadge{font-size:10px;color:#e0aaff;text-shadow:0 1px 2px #000}
+.jactive{display:inline-block;background:#9d4edd;color:#fff;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;margin:3px 2px}
+.rev.drunk{border-color:#c77dff;box-shadow:0 0 70px rgba(199,125,255,.7)}
+.rev.drunk h2{color:#e0aaff}
+.rev .drunkbig{font-size:60px;animation:drunkwob 1s infinite ease-in-out}
+@keyframes drunkwob{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg) translateY(-4px)}}
+.stolechip{display:inline-block;background:#2b2140;border:1px solid #9d4edd;color:#e0aaff;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:700;margin:2px}
+/* récap jokers avant contrôle */
+.jokline{display:flex;align-items:center;gap:10px;background:var(--panel2);border-left:4px solid #9d4edd;border-radius:8px;padding:11px 14px;margin-bottom:8px;text-align:left;font-size:15px}
+.jokline .je{font-size:22px}
+/* José le chat */
+#catov{position:fixed;inset:0;z-index:70;pointer-events:none;display:none;overflow:hidden}
+#catov.show{display:block}
+.cat{position:absolute;bottom:8vh;left:-140px;font-size:90px;animation:catwalk 6s linear forwards;filter:drop-shadow(0 4px 8px #000)}
+.cat .catem{display:inline-block;transform:scaleX(-1);animation:catstep .4s infinite alternate}
+@keyframes catwalk{0%{left:-140px}35%{left:calc(50% - 45px)}65%{left:calc(50% - 45px)}100%{left:110%}}
+@keyframes catstep{from{transform:scaleX(-1) rotate(-4deg)}to{transform:scaleX(-1) rotate(4deg) translateY(-6px)}}
+.catbubble{position:absolute;bottom:calc(8vh + 110px);left:50%;transform:translateX(-50%);background:#fff;color:#111;font-weight:800;font-size:20px;padding:12px 18px;border-radius:16px;opacity:0;animation:bubblepop 6s linear forwards;white-space:nowrap;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.catbubble::after{content:"";position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);border:10px solid transparent;border-top-color:#fff;border-bottom:0}
+@keyframes bubblepop{0%,30%{opacity:0;transform:translateX(-50%) scale(.5)}38%,62%{opacity:1;transform:translateX(-50%) scale(1)}70%,100%{opacity:0;transform:translateX(-50%) scale(.8)}}
+/* voleur : liste des cibles */
+.thiefsec{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;text-align:left}
+.thiefsec h3{display:flex;align-items:center;gap:8px}
+.thiefhand{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:6px}
+.thiefhand .item{min-height:72px}
+.thiefhand .item .em{font-size:22px}.thiefhand .item .nm{font-size:9px}
+/* œil : lignes avec pièces */
+.eyerow{display:flex;align-items:center;gap:10px;background:var(--panel2);border-radius:10px;padding:9px 12px;margin-bottom:6px}
+.eyerow .rname{flex:1;text-align:left;font-weight:700}
+.eyerow .ec{color:var(--gold);font-weight:800}
 </style>
 </head>
 <body>
@@ -248,9 +288,13 @@ td:first-child,th:first-child{text-align:left}
 </div>
 
 <div class="announce" id="announce"><div class="inner" id="announce-in"></div></div>
+<div class="announce" id="jokov"><div class="inner" id="jokov-in"></div></div>
 <div class="fsov" id="sumov"><div class="fscard card" id="sumov-in"></div></div>
+<div class="fsov" id="eyeov"><div class="fscard card" id="eyeov-in"></div></div>
+<div class="modal" id="jokpick"><div class="card" id="jokpick-in"></div></div>
 <div class="begov" id="begov"><div class="begcard card" id="begov-in"></div></div>
 <div class="ov" id="ov"><div class="rev" id="rev"></div></div>
+<div id="catov"></div>
 
 <script>
 /* ============ ASSETS ============ */
@@ -279,8 +323,24 @@ const ITEMS={
   diamonds:{nm:"Diamants",em:"💎",legal:false,cost:6,value:12,penalty:13,col:"#9be7ff"},
   ivory:{nm:"Ivoire",em:"🐘",legal:false,cost:7,value:14,penalty:16,col:"#f0ead6"},
   arms:{nm:"Armes",em:"🔪",legal:false,cost:8,value:16,penalty:18,col:"#9aa0a6"},
+  art:{nm:"Tableau volé",em:"🖼️",legal:false,cost:9,value:18,penalty:20,col:"#e0b1cb"},
+  gold:{nm:"Lingots d'or",em:"🪙",legal:false,cost:11,value:24,penalty:27,col:"#ffd166"},
   pistol:{nm:"Pistolet",em:"🔫",legal:false,cost:0,value:30,penalty:25,col:"#cdd2d6",special:true},
   nuke:{nm:"Bombe nucléaire",em:"☢️",legal:false,cost:0,value:0,penalty:50,col:"#b5e853",special:true,nuke:true},
+  joker_hamoud:{nm:"Hamoud Boualem",em:"🥤",legal:false,cost:0,value:0,penalty:0,col:"#c77dff",joker:"hamoud"},
+  joker_double:{nm:"Double point",em:"✨",legal:false,cost:0,value:0,penalty:0,col:"#c77dff",joker:"double"},
+  joker_eye:{nm:"L'œil d'El Hajj",em:"👁️",legal:false,cost:0,value:0,penalty:0,col:"#c77dff",joker:"eye"},
+  joker_jose:{nm:"José",em:"🐈",legal:false,cost:0,value:0,penalty:0,col:"#c77dff",joker:"jose"},
+  joker_thief:{nm:"Voleur pro max",em:"🥷",legal:false,cost:0,value:0,penalty:0,col:"#c77dff",joker:"thief"},
+  joker_leech:{nm:"Sangsue",em:"🧛",legal:false,cost:0,value:0,penalty:0,col:"#c77dff",joker:"leech"},
+};
+const JOKERS={
+  hamoud:{nm:"Hamoud Boualem",em:"🥤",desc:"Offre une boisson au douanier : il est ivre et TA cargaison passe direct cette manche, quoi qu'il y ait dedans. Active-le pendant la préparation ou pile quand c'est ton tour au contrôle."},
+  double:{nm:"Double point",em:"✨",desc:"Tes gains de la manche sont doublés si ta cargaison passe. Active-le pendant la préparation."},
+  eye:{nm:"L'œil d'El Hajj",em:"👁️",desc:"Vois le classement DÉTAILLÉ (pièces exactes de chacun) jusqu'à la fin de la manche. Une seule fois."},
+  jose:{nm:"José",em:"🐈",desc:"Envoie José le chat miauler « J'suis un con » sur l'écran des joueurs de ton choix. 100% anonyme."},
+  thief:{nm:"Voleur pro max",em:"🥷",desc:"Regarde les mains et coffres des autres marchands et vole UN objet gratuitement — direct dans ta valise, même pleine. Fais vite, avant la fin de la préparation !"},
+  leech:{nm:"Sangsue",em:"🧛",desc:"Aspire 10 pièces à un joueur au début de la manche. L'attaque est annoncée à tous avant le contrôle."},
 };
 const INTRO_MS=4000, NEGO_MS=20000, SUMMARY_MS=5000, OFFICERPOP_MS=3500, BEG_MS=60000;
 const LEGAL=Object.keys(ITEMS).filter(k=>ITEMS[k].legal);
@@ -327,6 +387,7 @@ let announcedRound=-1, timerRound=-1, prepDeadline=0, autoLockedRound=-1, forced
 let ctrlKey=null, ctrlStart=0, ctrlPhase='wait', ctrlAutoKey=null, revealUntil=0;
 let sumRound=-1, sumDeadline=0, sumNextKey=null, sumShown=false, offPopShown=false, offDeadline=0;
 let begSeen=null, begStartLocal=0, begEndKey=null, begConfirm=null, begEndedFor=null;
+let jokAnnounceRound=-1, jokAnnounceUntil=0, eyeShownRound=-1, joseShownSeq=0;
 
 /* ============ websocket ============ */
 function buildWs(){const base=location.pathname.replace(/\/+$/,'');return (location.protocol==='https:'?'wss://':'ws://')+location.host+base+'/ws/'+room;}
@@ -365,10 +426,18 @@ function render(){
   if(VIEW.phase==='prepare'){if(VIEW.round!==timerRound){timerRound=VIEW.round;prepDeadline=Date.now()+60000;autoLockedRound=-1;forcedRound=-1;}}
   else {prepDeadline=0;}
   handleReveal();
+  handleJose();
+  // récap jokers de la manche (avant le premier contrôle) + classement détaillé (Œil d'El Hajj)
+  if(VIEW.phase==='inspect'&&VIEW.round!==jokAnnounceRound){
+    jokAnnounceRound=VIEW.round;
+    if(VIEW.jokerLog&&VIEW.jokerLog.length){jokAnnounceUntil=Date.now()+4200;showJokerAnnounce();}
+    else jokAnnounceUntil=0;
+  }
+  if(VIEW.eye&&eyeShownRound!==VIEW.round){eyeShownRound=VIEW.round;showEyeOverlay();}
   // chronologie du contrôle (intro 4s -> négo 20s) par cible
   if(VIEW.phase==='inspect'&&VIEW.inspect){
     const k=VIEW.round+':'+VIEW.inspect.index;
-    if(k!==ctrlKey){ctrlKey=k;ctrlStart=Math.max(Date.now(),revealUntil);ctrlPhase=Date.now()<ctrlStart?'wait':'intro';ctrlAutoKey=null;}
+    if(k!==ctrlKey){ctrlKey=k;ctrlStart=Math.max(Date.now(),revealUntil,jokAnnounceUntil);ctrlPhase=Date.now()<ctrlStart?'wait':'intro';ctrlAutoKey=null;}
   } else { ctrlKey=null; }
   // résumé plein écran : on montre D'ABORD le résultat de la dernière inspection,
   // PUIS (après l'animation) le résumé 5s, PUIS la manche suivante.
@@ -403,6 +472,55 @@ function showAnnounce(){
   clearTimeout(showAnnounce._t);showAnnounce._t=setTimeout(()=>a.classList.remove('show'),5000);
 }
 
+/* ---- récap jokers de la manche (avant le premier contrôle, jamais pour José) ---- */
+function jokLine(e){
+  const meta=JOKERS[e.joker]||{em:'🃏'};
+  let txt;
+  if(e.joker==='hamoud')txt='a saoulé le douanier — sa cargaison est passée automatiquement !';
+  else if(e.joker==='double')txt="a activé <b>Double point</b> — gains doublés si ça passe !";
+  else if(e.joker==='eye')txt="a consulté <b>L'œil d'El Hajj</b> — vue sur le classement détaillé cette manche.";
+  else if(e.joker==='thief')txt=`a envoyé le <b>Voleur pro max</b> chez <b>${esc(e.targetName)}</b> et lui a volé un objet !`;
+  else if(e.joker==='leech')txt=`a aspiré <b>${e.amount}</b> 💰 à <b>${esc(e.targetName)}</b> avec la <b>Sangsue</b> !`;
+  else txt='a activé un joker.';
+  return `<div class="jokline"><span class="je">${meta.em}</span><span><b>${esc(e.byName)}</b> ${txt}</span></div>`;
+}
+function showJokerAnnounce(){
+  const rows=(VIEW.jokerLog||[]).map(jokLine).join('');
+  Snd.gong();
+  $('#jokov-in').innerHTML=`<div class="muted" style="font-size:15px">Manche ${VIEW.round}/${VIEW.totalRounds}</div>
+    <h2 style="margin:6px 0">🃏 Jokers activés</h2>
+    <div style="text-align:left;margin-top:10px;max-width:340px">${rows||'<p class="muted">—</p>'}</div>`;
+  const a=$('#jokov');a.classList.add('show');
+  clearTimeout(showJokerAnnounce._t);showJokerAnnounce._t=setTimeout(()=>a.classList.remove('show'),4200);
+}
+
+/* ---- L'œil d'El Hajj : classement détaillé ---- */
+function showEyeOverlay(){
+  const rows=(VIEW.eye||[]).map(p=>`<div class="eyerow"><span class="rpos">${p.rank}</span>${avImg(p.avatar,'')}<span class="rname">${p.eliminated?'☠️ ':''}${esc(p.name)}</span><span class="ec">${p.coins} 💰</span></div>`).join('');
+  $('#eyeov-in').innerHTML=`<div style="font-size:34px">👁️</div><h2>L'œil d'El Hajj</h2>
+    <div class="muted" style="font-size:12px">classement détaillé — valable cette manche seulement</div>
+    <div class="sumrows" style="margin-top:10px">${rows}</div>
+    <button class="btn btn-primary btn-big" id="eyeclose">Fermer</button>`;
+  Snd.coin();
+  $('#eyeov').classList.add('show');
+  $('#eyeclose').onclick=()=>$('#eyeov').classList.remove('show');
+}
+
+/* ---- José le chat : envoi anonyme sur l'écran des cibles ---- */
+function handleJose(){
+  if(!VIEW.jose||!VIEW.jose.forMe)return;
+  if(VIEW.jose.seq===joseShownSeq)return;
+  joseShownSeq=VIEW.jose.seq;
+  showJoseCat();
+}
+function showJoseCat(){
+  const ov=$('#catov');
+  ov.innerHTML=`<div class="cat"><span class="catem">🐈</span></div><div class="catbubble">J'suis un con 😹</div>`;
+  ov.classList.add('show');
+  Snd.tap();setTimeout(()=>Snd.tap(),350);
+  clearTimeout(showJoseCat._t);showJoseCat._t=setTimeout(()=>{ov.classList.remove('show');ov.innerHTML='';},6200);
+}
+
 /* ---- plateau ---- */
 function boardHtml(centerHtml){
   const n=VIEW.players.length||1;
@@ -422,7 +540,8 @@ function boardHtml(centerHtml){
     nodes+=`<div class="${cls.join(' ')}" style="left:${x}%;top:${y}%">
       <div style="position:relative;display:inline-block">${avImg(p.avatar,'')}${badge}</div>
       <div class="seatname" style="${p.id===VIEW.you?'color:var(--gold)':''}">${esc(p.name)}</div>
-      ${p.id===VIEW.you?`<div class="seatcoins">${p.coins}💰</div>`:''}</div>`;
+      ${p.id===VIEW.you?`<div class="seatcoins">${p.coins}💰</div>`:''}
+      ${p.jcount?`<div class="jbadge">🃏×${p.jcount}</div>`:''}</div>`;
   });
   const bg=isUrl(BOARD)?`style="background-image:url('${BOARD}')"`:'';
   return `<div class="board ${n>6?'crowded':''}" ${bg}><div class="bcenter">${centerHtml||''}</div>${nodes}</div>`;
@@ -448,8 +567,12 @@ function renderLobby(){
      <h3>Nombre de joueurs prévu</h3>
      <div class="stepper" style="display:inline-flex;margin:6px 0"><button class="btn btn-small" id="capm">−</button>
        <span style="min-width:36px;font-size:20px;font-weight:800">${VIEW.cfg.maxPlayers}</span><button class="btn btn-small" id="capp">+</button></div>
-     <p class="muted" style="font-size:13px">S'agrandit tout seul si d'autres rejoignent (max 10). Tout le monde joue, aucun spectateur. Chacun douanier <b>2 fois</b> → ${2*Math.max(VIEW.players.length,VIEW.cfg.startMin)} manches.</p>
-   </div>`:`<div class="card" style="text-align:center"><p class="muted">${VIEW.players.length} joueur(s) · chacun douanier 2 fois</p></div>`}
+     <h3 style="margin-top:16px">Tours de table</h3>
+     <p class="muted" style="font-size:12px;margin-bottom:2px">Chacun sera douanier ce nombre de fois</p>
+     <div class="stepper" style="display:inline-flex;margin:6px 0"><button class="btn btn-small" id="tourm">−</button>
+       <span style="min-width:36px;font-size:20px;font-weight:800">${VIEW.tours||2}</span><button class="btn btn-small" id="tourp">+</button></div>
+     <p class="muted" style="font-size:13px">S'agrandit tout seul si d'autres rejoignent (max 10). Tout le monde joue, aucun spectateur. Chacun douanier <b>${VIEW.tours||2} fois</b> → ${(VIEW.tours||2)*Math.max(VIEW.players.length,VIEW.cfg.startMin)} manches. Plus il y a de manches, plus les objets de fin de partie sont rares et gros.</p>
+   </div>`:`<div class="card" style="text-align:center"><p class="muted">${VIEW.players.length} joueur(s) · chacun douanier ${VIEW.tours||2} fois</p></div>`}
    <div class="card">
      <h2>Joueurs (${VIEW.players.length}/${VIEW.cfg.maxPlayers})</h2>
      <div class="score" style="margin-top:12px">${VIEW.players.map(p=>`<span class="chip ${p.id===VIEW.you?'me':''}">
@@ -465,6 +588,9 @@ function renderLobby(){
   const cm=$('#capm'),cp=$('#capp');
   if(cm)cm.onclick=()=>{Snd.tap();sendAction({type:'set_cap',n:Math.max(VIEW.cfg.startMin,VIEW.cfg.maxPlayers-1)});};
   if(cp)cp.onclick=()=>{Snd.tap();sendAction({type:'set_cap',n:Math.min(VIEW.cfg.hardMax,VIEW.cfg.maxPlayers+1)});};
+  const tm=$('#tourm'),tp=$('#tourp');
+  if(tm)tm.onclick=()=>{Snd.tap();sendAction({type:'set_tours',n:Math.max(VIEW.cfg.toursMin,(VIEW.tours||2)-1)});};
+  if(tp)tp.onclick=()=>{Snd.tap();sendAction({type:'set_tours',n:Math.min(VIEW.cfg.toursMax,(VIEW.tours||2)+1)});};
   const sb=$('#startbtn');if(sb)sb.onclick=()=>{Snd.whoosh();sendAction({type:'start'});};
 }
 
@@ -515,11 +641,22 @@ function renderPrepare(ph){
     ph.innerHTML=`${boardHtml('👮 Tu es<br>le douanier')}
       <div class="card" style="text-align:center"><h2>👮 Tu es le douanier</h2>
       <p class="muted">Les contrebandiers préparent leur coffre…</p>
-      <p class="muted" style="font-size:13px">Le contrôle démarre dès que tout le monde a verrouillé.</p></div>`;
+      <p class="muted" style="font-size:13px">Le contrôle démarre dès que tout le monde a verrouillé.</p></div>
+      ${jokerBarSection(true,null)}`;
+    wireJokerBar();
     return;
   }
   if(!VIEW.me){ph.innerHTML=`${boardHtml()}<div class="card"><p class="muted">…</p></div>`;return;}
-  if(VIEW.me.ready){ph.innerHTML=`${boardHtml('Coffre<br>verrouillé 🔒')}<div class="card" style="text-align:center"><h2>Coffre verrouillé 🔒</h2><p class="muted">En attente des autres…</p></div>`;return;}
+  if(VIEW.me.ready){
+    ph.innerHTML=`${boardHtml('Coffre<br>verrouillé 🔒')}<div class="card" style="text-align:center"><h2>Coffre verrouillé 🔒</h2><p class="muted">En attente des autres…</p>
+      ${(VIEW.me.stolen&&VIEW.me.stolen.length)?`<div style="margin-top:10px">${VIEW.me.stolen.map(id=>`<span class="stolechip">${ITEMS[id].em} ${ITEMS[id].nm} 🥷</span>`).join('')}</div>`:''}
+      ${VIEW.me.hamoudActive?`<div class="jactive">🥤 Hamoud actif — tu passes direct</div>`:''}
+      ${VIEW.me.doubleActive?`<div class="jactive">✨ Double point actif</div>`:''}</div>
+      ${jokerBarSection(false,VIEW.me)}
+      ${thiefPanelHtml()}`;
+    wireJokerBar();wireThiefPanel();
+    return;
+  }
   resetPrep();
   const me=meRec();const hand=VIEW.me.hand;const maxB=Math.min(VIEW.cfg.maxBribe,Math.max(0,me?me.coins:0));
   const negative=me&&me.coins<0;
@@ -534,8 +671,13 @@ function renderPrepare(ph){
     <button class="btn btn-ghost btn-small" id="dhonest" style="margin-top:8px">Déclarer comme mon coffre</button>
     <div class="lab">Pot-de-vin 💰 <span id="bv">${prep.bribe}</span> (max ${maxB})</div>
     <input type="range" id="brange" min="0" max="${maxB}" value="${Math.min(prep.bribe,maxB)}">
+    ${VIEW.me.hamoudActive?`<div class="jactive">🥤 Hamoud actif — ta cargaison passera direct</div>`:''}
+    ${VIEW.me.doubleActive?`<div class="jactive">✨ Double point actif</div>`:''}
     <button class="btn btn-primary btn-big" id="lock">Verrouiller le coffre</button>
-    <p class="error" id="perr"></p></div>`;
+    <p class="error" id="perr"></p></div>
+    ${jokerBarSection(false,VIEW.me)}
+    ${thiefPanelHtml()}`;
+  wireJokerBar();wireThiefPanel();
   const handEl=$('#hand');
   hand.forEach((id,i)=>{const inSel=prep.sel.includes(i);
     const blocked=ITEMS[id].special&&negative;
@@ -611,13 +753,15 @@ function renderInspect(ph){
         <button class="btn btn-open btn-big" id="open" style="margin:0">🔓 Ouvrir le coffre<small>honnête = tu paies le prix</small></button></div>
       ${tgt.benefactor>0?`<button class="btn btn-debt btn-big" id="debtpass" style="margin-top:10px">🤝 Laisser passer par dette</button>`:''}`;
   }else if(isTarget){
+    const myHamoud=(VIEW.myJokers&&VIEW.myJokers.hamoud)||0;
     panel=`<div class="declbox"><div class="dl">Tu déclares</div><div class="dv">${ds}</div></div>
       <div class="bribebox ${tgt.bribe>0?'has':''}">Ton pot-de-vin : <b>${tgt.bribe}</b> / ${maxB} 💰</div>
       <div class="muted">Surenchéris pour le convaincre 👇</div>
       <div class="raise">
         <button class="btn" data-amt="1" ${tgt.bribe>=maxB?'disabled':''}>+1</button>
         <button class="btn" data-amt="3" ${tgt.bribe>=maxB?'disabled':''}>+3</button>
-        <button class="btn" data-amt="5" ${tgt.bribe>=maxB?'disabled':''}>+5</button></div>`;
+        <button class="btn" data-amt="5" ${tgt.bribe>=maxB?'disabled':''}>+5</button></div>
+      ${myHamoud?`<button class="jok" id="jk-hamoud-inspect" style="margin-top:12px;width:100%">${JOKERS.hamoud.em} Offrir un Hamoud Boualem — passage direct !${myHamoud>1?' ×'+myHamoud:''}</button>`:''}`;
   }else{
     const off=VIEW.players.find(p=>p.isOfficer);
     panel=`<p class="muted">👮 ${esc(off?off.name:'Le douanier')} décide…</p>
@@ -638,6 +782,7 @@ function renderInspect(ph){
     const db=$('#debtpass');if(db)db.onclick=()=>{Snd.cash();sendAction({type:'decide',target:tgt.id,action:'pass'});};
   } else if(isTarget){
     document.querySelectorAll('.raise .btn').forEach(b=>b.onclick=()=>{Snd.coin();sendAction({type:'raise_bribe',amount:+b.dataset.amt});});
+    const jhi=$('#jk-hamoud-inspect');if(jhi)jhi.onclick=()=>{Snd.coin();sendAction({type:'use_hamoud'});};
   } else {
     const hs=$('#hostskip');if(hs)hs.onclick=()=>{Snd.stamp();sendAction({type:'decide',target:tgt.id,action:'pass'});};
   }
@@ -699,6 +844,11 @@ function showReveal(r){
     title=r.nukePassed?'☢️ BOMBE NUCLÉAIRE PASSÉE !':'☢️ BOMBE DÉSAMORCÉE !';
     Snd.siren();setTimeout(()=>Snd.siren(),260);setTimeout(()=>r.nukePassed?Snd.win():Snd.lose(),520);
   }
+  if(r.drunk){
+    cls='drunk '+cls;top='<div class="drunkbig">🥤</div>';
+    title='🥤 DOUANIER SAOULÉ — ÇA PASSE !';
+    Snd.cash();
+  }
   // avatars (style plateau) : marchand vs douanier
   const sa=pById(r.smugglerId), oa=VIEW.players.find(p=>p.isOfficer);
   const vs=r.action==='pass'?'➜':'🔍';
@@ -709,12 +859,18 @@ function showReveal(r){
   const net=r.smugglerDelta-(r.cost||0);
   let money;
   if(r.nukePassed){money=`<div style="font-size:18px">🏆 <b>${esc(r.smugglerName)}</b> remporte la partie !</div>`;}
-  else{money=`<div>Marchand <b>${fmt(net)}</b> 💰 <small>(coût −${r.cost||0} · contrôle ${fmt(r.smugglerDelta)})</small></div>
+  else{money=`${r.doubled?'<div style="color:#e0aaff;font-weight:800">✨ DOUBLE POINT !</div>':''}
+    <div>Marchand <b>${fmt(net)}</b> 💰 <small>(coût −${r.cost||0} · contrôle ${fmt(r.smugglerDelta)})</small></div>
     <div>Douanier <b>${fmt(r.officerDelta)}</b> 💰</div>`;}
+  if(r.jokersCarried&&r.jokersCarried.length){
+    const names=r.jokersCarried.map(id=>ITEMS[id].nm).join(', ');
+    const who=r.jokersTo==='officer'?`👮 ${esc(oa?oa.name:'Le douanier')} confisque et garde`:`${esc(r.smugglerName)} obtient`;
+    money+=`<div class="jactive" style="margin-top:8px">🃏 ${who} : ${esc(names)}</div>`;
+  }
   card.className='rev '+cls+(r.outcome==='busted'||r.hasPistol||r.hasNuke?' flash':'');
   card.innerHTML=`${top}<h2>${title}</h2>${avs}<div class="revit">${items}</div><div class="money">${money}</div>`;
   ov.classList.add('show');setTimeout(()=>card.classList.add('open'),60);
-  const dur=r.hasNuke?4600:r.hasPistol?3900:(r.outcome==='busted'?3200:2400);
+  const dur=r.hasNuke?4600:r.hasPistol?3900:r.drunk?3200:(r.outcome==='busted'?3200:2400);
   revealUntil=Date.now()+dur;
   clearTimeout(showReveal._t);showReveal._t=setTimeout(()=>{ov.classList.remove('show');card.classList.remove('open');},dur);
 }
@@ -726,9 +882,84 @@ function renderChat(){const m=$('#cmsgs');if(!m)return;
   m.innerHTML=(VIEW.chat||[]).map(x=>`<div class="cmsg"><b style="color:${x.color}">${esc(x.name)}:</b> ${esc(x.text)}</div>`).join('');
   m.scrollTop=m.scrollHeight;}
 
-function itemCard(id,extra){const it=ITEMS[id];const c=document.createElement('div');c.className='item '+(it.legal?'legal':'illegal')+(it.nuke?' nuke':it.special?' pistol':'')+(extra?' '+extra:'');
-  const vl=it.nuke?'FIN / −50':`−${it.cost}→+${it.value}`;
+function itemCard(id,extra){const it=ITEMS[id];const c=document.createElement('div');c.className='item '+(it.legal?'legal':'illegal')+(it.nuke?' nuke':it.joker?' jokr':it.special?' pistol':'')+(extra?' '+extra:'');
+  const vl=it.nuke?'FIN / −50':it.joker?'JOKER 🃏':`−${it.cost}→+${it.value}`;
   c.innerHTML=`<div class="em">${it.em}</div><div class="nm">${it.nm}</div><div class="vl">${vl}</div>`;return c;}
+
+/* ============ JOKERS : barre d'activation ============ */
+function jokerBarSection(isOfficer,sub){
+  const mj=VIEW.myJokers||{};
+  const has=k=>(mj[k]||0)>0;
+  if(!has('hamoud')&&!has('double')&&!has('eye')&&!has('jose')&&!has('thief')&&!has('leech'))return '';
+  let btns='';
+  if(!isOfficer&&sub){
+    if(has('hamoud'))btns+=`<button class="jok ${sub.hamoudActive?'dis':''}" id="jk-hamoud" ${sub.hamoudActive?'disabled':''}>${JOKERS.hamoud.em} ${sub.hamoudActive?'Activé ✓':'Hamoud Boualem'}${mj.hamoud>1?' ×'+mj.hamoud:''}</button>`;
+    if(has('double'))btns+=`<button class="jok ${sub.doubleActive?'dis':''}" id="jk-double" ${sub.doubleActive?'disabled':''}>${JOKERS.double.em} ${sub.doubleActive?'Activé ✓':'Double point'}${mj.double>1?' ×'+mj.double:''}</button>`;
+    if(has('thief'))btns+=`<button class="jok ${VIEW.thief?'dis':''}" id="jk-thief" ${VIEW.thief?'disabled':''}>${JOKERS.thief.em} Voleur pro max${mj.thief>1?' ×'+mj.thief:''}</button>`;
+  }
+  if(has('eye'))btns+=`<button class="jok" id="jk-eye">${JOKERS.eye.em} L'œil d'El Hajj${mj.eye>1?' ×'+mj.eye:''}</button>`;
+  if(has('jose'))btns+=`<button class="jok" id="jk-jose">${JOKERS.jose.em} José${mj.jose>1?' ×'+mj.jose:''}</button>`;
+  if(has('leech'))btns+=`<button class="jok" id="jk-leech">${JOKERS.leech.em} Sangsue${mj.leech>1?' ×'+mj.leech:''}</button>`;
+  if(!btns)return '';
+  return `<div class="card jokbar"><h3 style="color:#e0aaff">🃏 Tes jokers</h3><div class="joks">${btns}</div></div>`;
+}
+function wireJokerBar(){
+  const jh=$('#jk-hamoud');if(jh)jh.onclick=()=>{Snd.coin();sendAction({type:'use_hamoud'});};
+  const jd=$('#jk-double');if(jd)jd.onclick=()=>{Snd.coin();sendAction({type:'use_double'});};
+  const je=$('#jk-eye');if(je)je.onclick=()=>{Snd.coin();sendAction({type:'use_eye'});};
+  const jt=$('#jk-thief');if(jt)jt.onclick=()=>{Snd.tap();sendAction({type:'use_thief'});};
+  const jj=$('#jk-jose');if(jj)jj.onclick=openJosePicker;
+  const jl=$('#jk-leech');if(jl)jl.onclick=openLeechPicker;
+}
+
+/* José : cible multiple, 100% anonyme */
+function openJosePicker(){
+  const others=VIEW.players.filter(p=>p.id!==VIEW.you&&!p.eliminated);
+  let sel=new Set();
+  const draw=()=>{
+    $('#jokpick-in').innerHTML=`<h2>🐈 Envoyer José chez…</h2><p class="muted">Choisis un ou plusieurs joueurs — José ira miauler chez eux. 100% anonyme, personne ne saura que c'est toi.</p>
+      <div class="avgrid" style="grid-template-columns:repeat(4,1fr)">${others.map(p=>`<div class="avpick ${sel.has(p.id)?'sel':''}" data-id="${p.id}"><img src="${AVATARS[(p.avatar||0)%AVATARS.length].url}" alt=""></div>`).join('')}</div>
+      <div class="muted" style="font-size:12px;margin-top:6px">${others.map(p=>esc(p.name)).join(' · ')}</div>
+      <button class="btn btn-primary btn-big" id="josesend" ${sel.size?'':'disabled'}>Envoyer José 🐈</button>
+      <button class="btn btn-ghost btn-big" id="josecancel">Annuler</button>`;
+    document.querySelectorAll('#jokpick .avpick').forEach(el=>el.onclick=()=>{const id=el.dataset.id;if(sel.has(id))sel.delete(id);else sel.add(id);Snd.tap();draw();});
+    $('#josesend').onclick=()=>{Snd.whoosh();sendAction({type:'use_jose',targets:[...sel]});$('#jokpick').classList.remove('show');};
+    $('#josecancel').onclick=()=>$('#jokpick').classList.remove('show');
+  };
+  draw();
+  $('#jokpick').classList.add('show');
+}
+/* Sangsue : une seule cible, annoncée à tous avant le contrôle */
+function openLeechPicker(){
+  const others=VIEW.players.filter(p=>p.id!==VIEW.you&&!p.eliminated);
+  $('#jokpick-in').innerHTML=`<h2>🧛 Sangsue — choisis une cible</h2><p class="muted">Tu aspires 10 💰 à ce joueur, tout de suite. L'attaque sera annoncée à tous avant le contrôle.</p>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">${others.map(p=>`<button class="btn" data-id="${p.id}">${esc(p.name)}</button>`).join('')}</div>
+    <button class="btn btn-ghost btn-big" id="leechcancel" style="margin-top:12px">Annuler</button>`;
+  document.querySelectorAll('#jokpick [data-id]').forEach(b=>b.onclick=()=>{Snd.cash();sendAction({type:'use_leech',target:b.dataset.id});$('#jokpick').classList.remove('show');});
+  $('#leechcancel').onclick=()=>$('#jokpick').classList.remove('show');
+  $('#jokpick').classList.add('show');
+}
+
+/* Voleur pro max : vue sur les mains/coffres des autres marchands + vol gratuit */
+function thiefPanelHtml(){
+  if(!VIEW.thief)return '';
+  const stealCard=(id,owner,from)=>{const it=ITEMS[id];
+    return `<div class="item ${it.legal?'legal':'illegal'}${it.nuke?' nuke':it.joker?' jokr':it.special?' pistol':''}" data-steal-owner="${owner}" data-steal-from="${from}" data-steal-item="${id}">
+      <div class="em">${it.em}</div><div class="nm">${it.nm}</div></div>`;};
+  const secs=VIEW.thief.map(p=>{
+    const handCards=p.hand.map(id=>stealCard(id,p.id,'hand')).join('');
+    const chestCards=p.ready&&p.chest.length?p.chest.map(id=>stealCard(id,p.id,'chest')).join(''):'';
+    return `<div style="margin-top:12px">${avImg(p.avatar,'')} <b>${esc(p.name)}</b> ${p.ready?'🔒 coffre verrouillé':'✏️ en préparation'}
+      <div class="lab" style="margin:6px 0 2px">Main</div><div class="thiefhand">${handCards}</div>
+      ${p.ready?`<div class="lab" style="margin:6px 0 2px">Coffre</div><div class="thiefhand">${chestCards||'<span class="muted" style="font-size:12px">vide</span>'}</div>`:''}</div>`;
+  }).join('');
+  return `<div class="thiefsec"><h3>🥷 Voleur pro max — clique un objet pour le voler gratuitement</h3>${secs}</div>`;
+}
+function wireThiefPanel(){
+  document.querySelectorAll('[data-steal-owner]').forEach(el=>{
+    el.onclick=()=>{Snd.pick();sendAction({type:'steal',target:el.dataset.stealOwner,from:el.dataset.stealFrom,item:el.dataset.stealItem});};
+  });
+}
 
 /* ---- résumé plein écran : avatars + total gagné/perdu coloré ---- */
 function roundTally(){

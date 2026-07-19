@@ -22,3 +22,10 @@ Le jeu est déployé et jouable ici :
 ## Mettre à jour le jeu (même URL)
 Re-zipper `logic.js` + `index.html` à la racine, le rendre accessible en https,
 puis `deploy_game` avec le même `game_id`.
+
+## Historique
+- **v2** — ajout des tours de table réglables par l'hôte, des objets de plus
+  en plus rares en fin de partie (tableau volé, lingots d'or), et des 6
+  jokers (Hamoud Boualem, Double point, L'œil d'El Hajj, José, Voleur pro
+  max, Sangsue). Testé avec une suite de 38 assertions fonctionnelles sur
+  `logic.js` avant déploiement.
